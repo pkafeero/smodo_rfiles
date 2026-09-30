@@ -1,0 +1,146 @@
+---
+title: "Session8"
+author: "Paddy Kafeero"
+date: "2026-01-25"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+source("C:/Users/PaddyK/Desktop/Random_r_Code/src/setup.R")
+
+```
+
+Aims
+• Understand how to appropriately conduct hypothesis tests on data from a matched case
+control study.
+• Use appropriate statistical tests to analyse matched studies with continuous dependent
+variables.
+
+
+
+Analysis
+Question 1
+
+```{r}
+vit <- rio::import("C:/Users/PaddyK/Desktop/MSc Medical Statistics/Stat_Models_Discrete/Practicals/Session8/vit_E.csv")
+str(vit)
+
+head(vit, 10)
+
+
+vit$case2 <- factor(vit$case)
+
+
+
+
+```
+
+Question 2
+```{r}
+vit %>% group_by(case2) %>% summarise(mean=mean(vitE), sd=sd(vitE), median=median(vitE))
+vit %>% group_by(case) %>% skim(vitE)
+
+#Box plot
+ggplot(vit, aes(x=case2, y=vitE))+ geom_boxplot()
+
+#Density plot
+ggplot(vit, aes(x=vitE))+ geom_density() + facet_wrap(~case2)
+
+```
+
+Question 3
+```{r}
+##Using linear regression: This is considered an invalid approach to dealing with matched data!
+lm1 <- lm( vitE ~ case, data=vit)
+summary(lm1)
+
+lm2 <- lm( vitE ~ case + factor(set), data=vit)
+summary(lm2) 
+
+```
+For both linear regressions, we see that we do not have evidence of a difference in Vitamin E levels for the cases and the controls.
+The case and set are completely independent and hence we wont see any change in the coefficient. The standard error for the case changes because addition of predictors changes the residual standard error and hence the Standard error changes because of that.
+But its impornat to know that set at this point really isnt helpful evven though it captures details of ther variables.
+
+Question 4
+```{r}
+##Let us reshape the data to wide format for each set to have a row, and then we make the data suitable for analysis for the paired t-test and other analyses
+vitWide <- reshape(vit, v.names=c("vitE"), timevar="case",
+idvar="set",direction="wide")
+head(vitWide, 10)
+
+```
+
+Question 5
+```{r}
+t.test(vitWide$vitE.0, vitWide$vitE.1, paired = T)
+
+##Assumptions for the paired t-test
+#Normality of the paired differences: using densityplots, qqplots, shapirowilk test
+vitWide$vit_diff <- vitWide$vitE.0 - vitWide$vitE.1
+ggplot(vitWide, aes(x=vit_diff)) + geom_density()
+shapiro.test(vitWide$vit_diff) ##For Shapiro, if the p-value is above 0.05 then we assume approximate normality
+
+qqnorm(vitWide$vit_diff)
+qqline(vitWide$vit_diff)
+
+
+```
+
+
+Question 6
+```{r}
+vitWide$vitECaseHigh <- ifelse(vitWide$vitE.1>12, 1, 0)
+vitWide$vitEControlHigh <- ifelse(vitWide$vitE.0>12, 1, 0)
+
+table(vitWide$vitECaseHigh , vitWide$vitEControlHigh )
+vitWidetab <- vitWide %>% tabyl(vitECaseHigh, vitEControlHigh)  %>% adorn_totals("col") %>% adorn_totals("row")
+vitWidetab
+
+```
+Question 7
+```{r}
+binom.test(54, 95)
+binom.test(41, 95)
+```
+
+
+
+Question 8
+```{r}
+##Getting the odds ratio: conditional odds ratio for the association between the binary vitamin E variable and a person’s cancer status (case or control)
+(or <-  41/54)
+
+##The CI
+binom.test(41, 95)$conf.int
+CI_L <- (binom.test(41, 95)$conf.int[1])/(1-(binom.test(41, 95)$conf.int[1]))
+CI_U <- (binom.test(41, 95)$conf.int[2])/(1-(binom.test(41, 95)$conf.int[2]))
+
+
+
+
+
+#######OR
+(or <-  54/41)
+
+##The CI
+binom.test(54, 95)$conf.int
+CI_L <- (binom.test(54, 95)$conf.int[1])/(1-(binom.test(54, 95)$conf.int[1]))
+CI_U <- (binom.test(54, 95)$conf.int[2])/(1-(binom.test(54, 95)$conf.int[2]))
+
+
+cat("The odds ratio is", or, "with the CI being ", CI_L,"to",CI_U)
+```
+
+Question 9: Epidemiological conclusions
+Using the McNemar's test, we are looking for whether there is any evidence of association between the cancer and vitamin E exposure status.
+From this test we see that there is no evidence of association between cance
+
+we found that the estimated conditional odds ratio for the association between the binary vitamin E variable and a person’s cancer status (case or control) was 0.76, indicative of a protective effect of high vitamin E levels.
+
+From the OR, we see that we have 24% lower odds of being a case with high Vitamin E levels. This shows a protective effect of high vitamin E levels.
+However, given that our CI contains the null value, we cannot conclude on whether we have enough evidence on this.
+
+
+

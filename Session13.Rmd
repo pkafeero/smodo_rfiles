@@ -1,0 +1,135 @@
+---
+title: "Session13"
+author: "Paddy Kafeero"
+date: "2026-02-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+source("C:/Users/PaddyK/Desktop/Random_r_Code/src/setup.R")
+
+```
+
+Aims
+1. Understand how to fit models to count data using the glm command.
+2. Understand how to compare such models.
+3. Understand the concept of overdispersion, and how to identify it.
+
+Question 1
+```{r}
+medpar <- rio::import("C:/Users/PaddyK/Desktop/MSc Medical Statistics/Stat_Models_Discrete/Practicals/Session13/medpar.csv")
+str(medpar)
+View(medpar)
+head(medpar, 10)
+
+summary(medpar$los)
+
+##95% CI for mean length of stay
+summarytools::descr(medpar$los)
+(L <- mean(medpar$los) - 1.96*(sd(medpar$los)/sqrt(1495))) #we can use the 1.96 for large samples, otherwise we would have used the t0.975,n-1 for the CI
+(U <- mean(medpar$los) + 1.96*(sd(medpar$los)/sqrt(1495)))
+
+cat("The estimate for mean leangth of stay is", mean(medpar$los), "with CI",L,"to",U )
+```
+Minimum value is 116 and minimum is 1
+
+
+Question 2
+```{r}
+medpar_pois1 <- glm(los~1, family = poisson, data=medpar)
+summary(medpar_pois1)
+ exp(2.287896) ##gives us the mean value of the length of stay
+exp(confint.default(medpar_pois1))
+
+#Here we have tighter CIS as we assume the variable is Poisson distributed
+
+##The deviance is greater than the Df, so we can say that the model is incorrectly specfed for the data.
+```
+
+
+
+Question 3
+```{r}
+library(sandwich)
+vcovHC(medpar_pois1) ##sandwich variance of the intercept from abve
+sqrt(diag(vcovHC(medpar_pois1))) ##This gives us the SE for our estimate above!
+
+(U_sandw <- coef(medpar_pois1)[1] + 1.96* 0.02319038)
+(L_sandw <- coef(medpar_pois1)[1] - 1.96* 0.02319038)
+ exp(U_sandw)
+ exp(L_sandw)
+ 
+ 
+ ##Basically if the poisson was holding, the mean and variance of los would have been the same, and the it is much more h
+```
+
+
+Question 4
+```{r}
+medpar_pois2 <- glm(los~type2+type3, family = poisson, data=medpar)
+summary(medpar_pois2)
+
+exp(coef(medpar_pois2))
+exp(confint(medpar_pois2))
+
+
+```
+type2       0.237344   0.020902   11.36   <2e-16 *** -- howmuch the log mean increases if you are in type 22 compared to type 1. Length of stay is 27% higher (1.267) in type two than in type 1 (95% CI is)
+type3       0.725361   0.025903   28.00   <2e-16 ***
+
+
+Question 5
+```{r}
+medpar_pois3 <- glm(los~type2+type3+factor(age), family = poisson, data=medpar)
+summary(medpar_pois3)
+
+
+##Likelihood ratio test
+anova(medpar_pois1, medpar_pois2) ##string evidence that medpar_pois2 is better than medpar_pois1
+
+logLik(medpar_pois3) #This is the saturated model
+logLik(medpar_pois2) ##This is the current model
+
+
+
+```
+
+
+Question 6
+```{r}
+medpar_nb1 <- glm.nb(los~type2+type3, data=medpar)
+summary(medpar_nb1)
+
+
+###Factor age
+medpar_nb2 <- glm.nb(los~type2+type3+factor(age), data=medpar)
+summary(medpar_nb2)
+
+##Comapre the negative binomial models
+anova(medpar_nb2, medpar_nb1)
+
+##p-value 0f 0.77 indicates. Different because with the poison model , we assumed reasonable model.
+#Here we allow for possiility of overdispersion and now we see the model above is not rreally relevant.
+```
+
+
+Question 7
+```{r}
+
+```
+
+
+Question 8
+```{r}
+
+
+```
+
+
+
+
+
+
+
+
+

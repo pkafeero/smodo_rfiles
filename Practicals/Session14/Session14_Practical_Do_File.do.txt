@@ -1,0 +1,172 @@
+/*
+
+Model solutions for SMoDO Practical 14: Models for rates
+
+*/
+
+** Set directory - change this to your own folder
+
+
+** Load data
+	import delimited rubber.csv , clear
+	
+** Label and examine the key variables
+	label define lab_agegrp 1 "50-59" 2 "60-69" 3 "70-79" 4 "80-89" , replace
+		label values agegrp lab_agegrp
+	
+	codebook
+	list // Very small dataset, so we can list all the values
+	
+********************************************************************************
+********************************************************************************
+*** Question 1
+
+	* Total number of deaths and man-years of observation
+		tabstat deaths pyrs, s(sum)
+		
+	* Hence overall rate of death is
+		dis 160 / 19345
+	
+		* Multiply by 1000 to make easier to understand
+			dis 160 * 1000 / 19345
+			* 8.3 deaths per 1000 years of follow-up
+		
+		* Overall log death rate is given by
+			dis log(0.008270871)
+
+
+********************************************************************************
+********************************************************************************
+*** Question 2
+
+	tabstat deaths pyrs, s(sum) by(factory)
+
+	** Factory 1
+		dis 72 / 9774
+		dis log(72 / 9774)
+
+	** Factory 2
+		dis 88 / 9571
+		dis log(88 / 9571)
+
+	* 7.4 vs 9.2 per 1000 years of observation.
+	* Rate of death looks greater amongst men from Factory 2.
+
+********************************************************************************
+********************************************************************************
+*** Question 3
+
+	* Make new variable for death rate in each group
+		gen rate=deaths/pyrs
+			label var rate "Death rate (deaths/year)"
+
+	* Make a new variable for log death rate in each group
+		gen l_rate=log(rate)
+			label var l_rate "Log death rate (deaths/year)"	
+
+	* Plot the log-death rates
+		twoway (scatter l_rate agegrp, mlabel(factory)), ///
+			xtitle(age group) ytitle(log death rate) xlabel(1(1)4.2)
+
+			graph export "Q1.png" , width(1000) replace
+
+	/*
+		This plot confirms that the death rate amongst men from Factory 2 is a 
+		little higher than Factory 1 for men of all ages. It also shows that the 
+		death rate increases with age (as expected).
+	*/
+
+
+********************************************************************************
+********************************************************************************
+*** Question 5
+
+** Part (a)
+
+	gen lpyrs=log(pyrs)
+	
+	** Model without age
+		glm deaths, family(poisson) offset(lpyrs) link(log)
+			est store A
+
+	** Model with age (categorical)
+		glm deaths i.agegrp, family(poisson) offset(lpyrs) link(log)
+			est store B
+			
+	** Compare models
+		lrtest A B
+
+	** We can calculate this p-value ourselves by first getting the difference
+	* in log likelihoods,a nd multiplying by -2:
+		dis (-70.3626661 - -19.27674826) * -2
+	
+	* and then we refer to a chi-square distribution with 3 df (the age group
+	* variable has four levels, so the second model is calculating an extra 
+	* three parameters).
+		dis chi2tail(3,102.172)
+
+** Part (b)
+* For illustration purposes, we're going to switch to the poisson command now.
+
+	** i) 60-69 vs 50-59
+		poisson deaths i.agegrp , e(pyrs)
+			dis exp(1.582834) // Estimate
+			dis exp(1.004549) // Lower end of CI
+			dis exp(2.161118) // Upper end of CI
+		* Confirm the poisson command gives the same results as glm
+		glm deaths i.agegrp, family(poisson) offset(lpyrs) link(log)
+
+		** In glm we use the "eform" option to get rates; in Poisson we use irr
+		glm deaths i.agegrp, family(poisson) offset(lpyrs) link(log) eform
+		poisson deaths i.agegrp , e(pyrs) irr
+
+	** ii) 80-89 vs 70-79
+		* Using lincom:
+		poisson deaths i.agegrp, e(pyrs)
+			lincom 4.agegrp - 3.agegrp , irr
+				** Stata note: lincom continues to accept the eform and irr options
+				lincom 4.agegrp - 3.agegrp , eform
+
+		** Re-parameterise the model so that 70-79 is the baseline group
+			poisson deaths b3.agegrp, e(pyrs) irr
+
+		
+********************************************************************************
+********************************************************************************
+*** Question 6
+
+	glm deaths i.agegrp i.factory, family(poisson) offset(lpyrs) link(log) eform
+	est store C
+
+	
+	lrtest B C
+
+	** We can calculate this ourselves using the log likelihoods of the two models:
+		dis -2 * (-19.276745 - -18.529196)
+		dis chi2tail(1, 1.495098)
+
+********************************************************************************
+********************************************************************************
+*** Question 7
+
+	glm deaths i.agegrp##i.factory, family(poisson) offset(lpyrs) link(log) eform
+	est store SAT
+
+** Part (b)
+	lrtest C SAT
+
+** Part (d)
+	table factory agegrp, stat(mean rate) nototal
+		
+
+********************************************************************************
+********************************************************************************
+*** Question 8
+
+	glm deaths agegrp i.factory, family(poisson) offset(lpyrs) link(log) eform
+	est store D
+	lrtest D SAT
+	** Some evidence of poor fit. 
+
+
+

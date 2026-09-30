@@ -1,0 +1,174 @@
+/*
+
+Model solutions for SMoDO Practical 9
+
+*/
+
+** Set directory - change this to your own folder
+	
+********************************************************************************
+********************************************************************************
+*** PART A. VITAMIN E DATASET
+
+** Open dataset
+	import delimited vit_E.csv, clear case(preserve)
+
+* Generate high vitamin E variable
+	gen h_vitE = vitE>12
+
+* Reminder of OR
+	gen partial_r = 0
+	gen partial_s = 0
+	bysort set : replace partial_r = 1 if h_vitE[1] == 1 & h_vitE[2] == 0
+	bysort set : replace partial_s = 1 if h_vitE[1] == 0 & h_vitE[2] == 1
+	count if partial_r==1 & case==1
+	count if partial_s==1 & case==1
+	
+	dis 41 / 54
+
+********************************************************************************
+********************************************************************************
+*** Question 1
+
+** INCORRECT method
+	logistic case h_vitE i.set
+		** OR = 0.58. This is wrong.
+
+********************************************************************************
+********************************************************************************
+*** Question 2
+
+** CORRECT method
+* Conditional logistic regression
+	clogit case h_vitE, group(set) or nolog
+		** OR = 0.76. Correct. Exactly the same as we calculated by hand.
+		* Note that the CI is slightly different to exact one obtained 
+		* in Practical 8.
+	est store A
+********************************************************************************
+********************************************************************************
+*** Question 3
+
+** Return to continuous vitamin E variable
+	clogit case vitE , group(set) or nolog
+	est store B
+	* Note that this returns a very similar test statistic and p-value as 
+	* obtained from the regression analsis used in Session 8 where 
+	* vitamin E status was the dependent variable (equivalent to a paired t-test) 
+	regress vitE i.case i.set
+
+********************************************************************************
+********************************************************************************
+*** Question 4
+
+* Use an interaction with vit E to investigate changing effect over "time"
+	clogit case h_vitE##time , group(set) or
+** Note that we cannot estimate the effects of "time" (as the time variable takes 
+** the same value for each person within a matched set).
+    
+	** Test the interaction term 
+	est store C
+	lrtest A C
+		
+	** Estimate the odds ratios (and CIs) by "time" using lincom
+		lincom 1.h_vitE+1.h_vitE#2.time, eform
+		lincom 1.h_vitE+1.h_vitE#3.time, eform
+
+** We could also look use continuous vitamin E
+	clogit case vitE c.vitE#i.time , group(set) or
+	est store D
+
+	lrtest B D
+	* Some evidence that the association with vitamin E levels changes over time.
+
+	** Estimate the odds ratios (and CIs) by "time" using lincom
+		lincom vitE+vitE#2.time, eform
+		lincom vitE+vitE#3.time, eform  
+
+********************************************************************************
+********************************************************************************
+*** PART B. INFERTILITY DATASET
+
+** Load the data
+	import delimited infertility.csv, clear case(preserve)
+
+** Label the variables
+	label define lab_cc 0 Control 1 Case
+	label values case lab_cc
+
+	label define lab_count 0 Zero 1 One 2 "Two or more"
+	label values spontaneous induced lab_count
+	
+	label define lab_ed 1 "0-5 years" 2 "6-11 years" 3 "12+ years"
+	encode education, gen(newedu) label(lab_ed)
+	drop education
+	rename newedu education
+
+********************************************************************************
+********************************************************************************
+*** Question 5
+
+** Expore the data
+	describe
+	codebook
+	
+** a. Rows
+	sort stratum
+	list in 1/6 , sep(3)
+		* One row per person
+
+** b.
+	tab case
+	codebook stratum
+
+** c. Size of sets
+	* Note that 2x83=186, and we have 185 controls. So one set is smaller.
+	tab stratum
+	*
+	* If you can't see it by listing sets, you can make a variable to show size of each set
+		bysort stratum: gen size = _N
+		tab size
+		list if size==2
+		** So set 74 has only two women, one case and one control.
+		** This is okay and can be used in the analysis.
+		** A set without a case (or without any controls) cannot be used.
+
+********************************************************************************
+********************************************************************************
+*** Question 6
+
+** Conditional logistic regression
+		clogit case i.spontaneous, group(stratum) or
+			est store full
+
+	* Model with spontaneous, for LR test
+		qui clogit case, group(stratum) or
+			est store basic
+
+	* Likelihood ratio test
+	*  Note that this agrees with the test statistic and p-value reported top
+	* right in the clogit output
+	lrtest basic full
+
+********************************************************************************
+********************************************************************************
+*** Question 7
+
+** a. Matching variables only
+	logit case age parity i.education, or
+
+** b. Variables of interest only
+	logit case i.spontaneous, or
+
+** c. Matched variables and variables of interest
+	logit case i.spontaneous age parity i.education, or nolog
+
+** Note that the estimated odds ratios for the matching variables are no longer 
+** close to 1. This illustrates that we must always adjust for matching variables 
+** either explicitlty (as here) or implicity using conditional logistic regression 	
+
+** Comparing standard errors from the two valid approaches
+	logit case i.spontaneous age parity i.education, nolog
+	clogit case i.spontaneous, group(stratum) nolog
+	
+

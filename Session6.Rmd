@@ -1,0 +1,178 @@
+---
+title: "Session6"
+author: "Paddy Kafeero"
+date: "2026-01-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+source("C:/Users/PaddyK/Desktop/Random_r_Code/src/setup.R")
+
+```
+
+
+
+Part A = = = = %>% 
+Part B
+```{r}
+cattaneo2 <- rio::import("C:/Users/PaddyK/Desktop/MSc Medical Statistics/Stat_Models_Discrete/Practicals/Session6/cattaneo2.dta")
+str(cattaneo2)
+
+cattaneo2 <- zap_labels(cattaneo2) ##zap_labels: Removes value labels, leaving unlabelled vectors as is. Use this if you want to simply drop all labels from a data frame.
+cattaneo2$prevnewborndeath <- cattaneo2$deadkids
+```
+
+Question 1
+Explore the dataset
+```{r}
+View(cattaneo2)
+statar::sum_up(cattaneo2)
+broom::tidy(cattaneo2)
+summary(cattaneo2)
+library(skimr)
+skim(cattaneo2)  
+
+
+##Checking levels
+levels(cattaneo2$medu) ##number of years of education!
+
+##b combinining variables: combined mrace and mhisp to get one race variable
+table(cattaneo2$mhisp)
+table(cattaneo2$mrace)
+cattaneo2 <- cattaneo2 %>% mutate(race = case_when(
+  mhisp == 1 ~ "Hispanic",
+  mrace == 1 ~ "White",
+  mhisp==0 & mrace==0 ~ "Other",
+))
+
+table(cattaneo2$race)
+anyNA(cattaneo2$race
+      )
+```
+
+
+Outcome: lbweight : 1 if low birthweight
+Main Exposure: mbsmoke
+Potential confounders: alcohol, race = (mrace+mhisp), mage, nprenatal, 
+
+Question 2
+```{r}
+table(cattaneo2$mbsmoke, cattaneo2$lbweight)
+cattaneo2$mbsmoke <- factor(cattaneo2$mbsmoke)
+
+mod1 <- glm(lbweight~mbsmoke, family = binomial(link = "logit") , data = cattaneo2)
+summary(mod1)
+anova(mod1)
+broom::tidy(mod1, exponentiate = T, conf.int = T)
+
+```
+The anova on model one confirms that there is truly an association between maternal smoking status and low birthweight.
+However, we see that the odds of being low birthweight are two times higher (OR: 2.399) higher within the smoking mothers.
+
+Question 3
+```{r}
+mod2 <- glm(lbweight~mbsmoke + mmarried + race + mage + nprenatal + medu + alcohol, family = binomial(link = "logit") , data = cattaneo2)
+summary(mod2)
+broom::tidy(mod2, exponentiate = T, conf.int = T)
+
+
+predict(mod2,newdata=data.frame(mbsmoke=c(0,0,1,1),z=c(0,1,0,1)),type="response")
+
+
+##Marginal mean differences
+library(marginaleffects)
+comparisons(
+mod2,
+newdata = "mean",
+variables = list(mbsmoke= c(0,1)), 
+df="residual"
+)
+
+
+library(marginaleffects)
+comparisons(
+mod2,
+newdata = "mean",
+variables = "mbsmoke", 
+df="residual",
+transform = "exp"
+)
+
+avg_comparisons(mod2, comparison = "difference") # average (marginal) estimates.
+
+```
+Estimated marginal mean difference: odds 1.028807
+The smokers have 3% (2.8%) higher chance of low birth weight babies than the non smokers.
+
+
+Question 4
+Models with lower AIC (Akaike Information Criterion) are preferred to those with higher values.
+Here we do forward selection by AIC to select confounders to adjust for.
+```{r}
+#model with just mbsmoke
+mbsmokeMod <- glm(lbweight~mbsmoke, data=cattaneo2, family="binomial")
+
+step(mbsmokeMod, 
+     direction = "forward", 
+     scope = list(lower = ~mbsmoke, upper = ~mbsmoke + mmarried + mhisp + fhisp + foreign + 
+                    alcohol + prevnewborndeath + mage + medu + fage + fedu + monthslb + 
+                    order + mrace + frace + birthmonth))
+
+
+mod_forward <- glm(formula = lbweight ~ mbsmoke + mrace + mmarried, family = "binomial", 
+    data = cattaneo2)
+avg_comparisons(mod_forward, comparison = "difference")
+
+```
+
+
+Question 5
+```{r}
+install.packages("chest")
+library(chest)
+
+chest_glm(crude = "lbweight ~ mbsmoke",
+                 xlist = c("mmarried", "mhisp", "fhisp", "foreign", 
+                    "alcohol", "prevnewborndeath", "mage", "medu", "fage", "fedu",
+                      "monthslb", "order", "mrace", "frace", "birthmonth"),
+                 data = cattaneo2) ##thos one is using the p-change in estimates to come up to the most relevant values that change the estimate the most
+summary(mod4)
+
+```
+
+
+Question 6
+```{r}
+mbsmokeMod2 <- glm(lbweight~mbsmoke, data=cattaneo2, family="binomial")
+step(mbsmokeMod2, 
+     direction = "both", 
+     scope = list(lower = ~mbsmoke, upper = ~mbsmoke + mmarried + mhisp + fhisp + foreign + 
+                    alcohol + prevnewborndeath + mage + medu + fage + fedu + monthslb + 
+                    order + mrace + frace + birthmonth))
+
+
+mod_both <- glm(formula = lbweight ~ mbsmoke + mrace + mmarried, family = "binomial", 
+    data = cattaneo2)
+summary(mod_both)
+broom::tidy(mod_both, exponentiate = T, conf.int = T)
+
+###GIVE MARGINAL RISK DISFFERENCE
+avg_comparisons(mod_both, comparison = "difference", vcov = "HC1")
+#Marginal risk difference is 0.048 (CI)
+
+```
+
+
+Question 7
+```{r}
+##Question 7 usess the LASSO method!
+
+
+```
+
+
+
+
+
+
+

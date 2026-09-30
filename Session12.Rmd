@@ -1,0 +1,164 @@
+---
+title: "Session12"
+author: "Paddy Kafeero"
+date: "2026-02-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+source("C:/Users/PaddyK/Desktop/Random_r_Code/src/setup.R")
+
+```
+
+
+Question 1
+```{r}
+SAheart <- rio::import("C:/Users/PaddyK/Desktop/MSc Medical Statistics/Stat_Models_Discrete/Practicals/Session12/SAheart.csv")
+str(SAheart)
+View(SAheart)
+head(SAheart, 10)
+
+##Linear model
+chd_linear <- glm(chd~sbp, family=binomial, data=SAheart)
+summary(chd_linear) ##we can divide the SBP by 10 to have a more sensible interpretation. depending on the measurement. may be a 10 unit increase in SBP leads to....
+
+exp(chd_linear$coefficients)
+```
+We can see that there is evidence of an association between chd and sbp.
+
+Question 2
+```{r}
+plot(x=SAheart$sbp, y=chd_linear$fitted.values)
+
+#OR
+newdat <- expand.grid(chd_linear,
+                             sbp=SAheart$sbp
+                             )
+newdat$fitted <- predict(chd_linear, newdata=newdat, type="response")
+
+ggplot(newdat, aes(x=sbp, y=fitted)) + geom_line(size=1)
+
+```
+
+From the plot, we see a linear relationship between the predicted probabilities of CHD and the SBP.
+
+Question 3
+```{r}
+chd_loess <- loess(chd~sbp, data=SAheart)
+##Now lets plot the lowess predicted values again SBP and see how they differ from the above
+plot(x=SAheart$sbp, y=chd_loess$fitted)
+
+
+#The loess smoother suggests that the values are not really in a linear relationship as shown in the plot above.
+```
+
+
+Question 4
+```{r}
+##Now lets look at logit of the lowess predicted values
+SAheart$loess_logit <- logit(chd_loess$fitted)
+plot(x=SAheart$sbp, y=SAheart$loess_logit)
+ggplot(SAheart, aes(x=sbp, y=loess_logit)) + geom_line(size=1)
+```
+
+
+Question 5
+```{r}
+##Here we are going to work with a polynomial of the SBP to see the change of the smoothing.
+chd_quad <- glm(chd~sbp+I(sbp^2), data=SAheart)
+summary(chd_quad)
+
+##NOT SIGNIFICANT. lACK OF SIGNIFICANCE DOESNT NECESSARILY MEAN NOTHING IS GOING ON THOUGH.
+
+
+
+##Using a plot to compare fitted log odds values from this model with the ones estimated using loess.
+plot(x=SAheart$sbp, y=chd_quad$fitted)
+
+
+
+```
+
+
+Question 6
+```{r}
+library(splines)
+chd_rcs <- glm(chd~ns(sbp, df=4), data=SAheart, family = binomial)
+
+plot(x=SAheart$sbp, y=chd_rcs$fitted.values)
+
+```
+
+The cubic spline plot above is similar to the loess_logit shape but on a different scale.
+
+```{r}
+plot(SAheart$sbp, chd_loess$fitted,        # "l" for line
+     col  = "black",
+     xlab = "X", ylab = "Y")
+
+# Add more points on top
+points(SAheart$sbp, chd_rcs$fitted.values, col = "red")
+points(x=SAheart$sbp, y=chd_quad$fitted.values, col = "darkgreen")
+legend("bottomright",
+       legend = c("Loess", "Spline","Quad"),
+       col    = c("black", "red", "blue","darkgreen"),
+       lwd    = 2,
+       pch = 10)
+
+
+
+
+
+```
+
+
+
+Question 7
+```{r}
+chd_rcs <- glm(chd~ns(sbp, df=4), data=SAheart, family = binomial)
+
+plot(x=SAheart$sbp, y=chd_rcs$fitted.values)
+
+
+##HIGHER DF gives the model too much flexibility...
+```
+
+Question 8
+```{r}
+anova(chd_quad, chd_rcs) ##from this, we can see that it may not be valid to compare the two models using the likelihood ratio test
+#
+
+##Checkin the AIC for the two models
+AIC(chd_quad, chd_rcs)
+chd_quad$aic
+chd_rcs$aic
+##Looking at the two AICs, we usually conform that the model with the lower AIC is usually the more relevant model.
+
+```
+
+
+Question 9
+```{r}
+#Span 0.5
+chd_loess_0.5 <- loess(chd~sbp, data=SAheart, span = 0.5)
+plot(x=SAheart$sbp, y=chd_loess_0.5$fitted)
+
+
+#
+chd_loess_0.75 <- loess(chd~sbp, data=SAheart, span = 0.75)
+plot(x=SAheart$sbp, y=chd_loess_0.75$fitted)
+
+#
+chd_loess_0.25 <- loess(chd~sbp, data=SAheart, span = 0.25)
+plot(x=SAheart$sbp, y=chd_loess_0.25$fitted)
+
+
+##Generally the lower the value of the span, the more the lowess follows the data.
+#Lower spna, uses less data, , hence more variability. The closer it gets to the true. Issu with the small span is that we have noisy data.
+#Loess is usefull even with continuos outcomes.
+
+```
+
+
+
+

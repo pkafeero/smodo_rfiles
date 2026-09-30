@@ -1,0 +1,590 @@
+---
+title: "Assessment"
+author: "Paddy Kafeero"
+date: "2026-01-28"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+source("C:/Users/PaddyK/Desktop/Random_r_Code/src/setup.R")
+```
+
+Study 1 - cohort study
+
+[Statistical Methods]{.underline}
+
+Data was provided on the sex, age at enrolment into the cohort, smoking status at enrolment, death within 10 years of enrolment, indication of inclusion in the unmatched case-control study, indication of inclusion in the matched case-control study, and the matched set identifier for the matched case-control study. Descriptive analysis was done using tabulations for the means, standard deviations, median and IQ of age, overall and by the smoking status at enrolment. Similarly, counts and frequencies for sex at enrolment and death within 10 years were provided, overall and by the smoking status.
+
+Logistic regression models were fitted to assess the effect of smoking on 10-year mortality in the cohort study. Line graphs were plotted with predicted probability of mortality against age for smokers and non-smokers by sex, based on the unadjusted and adjusted model (with interactions). Standardisation was used to obtain the marginal estimates for proportion of preventable deaths if no one smoked, in comparison to the observed cases in the study.
+
+a)  Preliminaries Carry out and appropriately report any preliminary descriptive analysis of the data that you judge necessary.
+
+```{r}
+#Importing the data
+smodo2026 <- rio::import("C:/Users/PaddyK/Desktop/MSc Medical Statistics/Stat_Models_Discrete/Assignment/smodo2026.csv")
+##Checking for duplicate IDS
+anyDuplicated(smodo2026$id)
+
+#cohort <- smodo2026 %>% dplyr::filter(study2==0 & study3==0) %>% dplyr::select(id, sex, age, smoke, d)
+cohort <- smodo2026 %>% dplyr::select(id, sex, age, smoke, d)
+cohort <- cohort %>% mutate(
+  sex = factor(sex, levels = c(0,1), labels = c("female", "male")),
+  smoke = factor(smoke, levels = c(0,1), labels = c("non-smoker", "current smoker")),
+  d = factor(d, levels = c(0,1), labels = c("survived", "died")),
+
+)
+
+#Exploring the data
+str(cohort)
+skim(cohort, age)
+
+cohort %>% tabyl(smoke)
+cohort %>% tabyl(d)
+
+
+
+##pairwise comparison: Mortality
+cohort %>% tabyl(sex, d) %>% adorn_totals("col") #Mortality in the sex levels
+
+cohort %>% tabyl(smoke, d) %>% adorn_totals("col")
+cohort %>% ggplot(aes(x=factor(d), y=age)) + geom_boxplot()
+cohort %>% group_by(d) %>%  summarise(mean=mean(age)) ##Average age by mortality
+
+
+
+##Table1
+tab1<-CreateTableOne(
+  vars=c("age","sex","smoke","d"),
+  data=cohort,
+  strata = "smoke",
+  factorVars=c("sex","smoke","d"),
+  includeNA = FALSE,
+  test = F,
+  addOverall = T
+)
+print(tab1,showAllLevels = T)
+cohort %>% group_by(smoke) %>% summarise(medage=median(age), quantile(age, probs=c(0.25, 0.75)))
+
+###Graphs
+#Age descriptions
+#Box plot of age and smoking status
+age_smokeplot <- cohort %>% ggplot(aes(y=age, x=factor(smoke), fill=factor(sex))) +
+  geom_boxplot(color="black",show.legend = F) +
+  labs(x="Smoking status",
+       y="Age at enrolment (years)",
+       title = "Boxplot for age at enrolment and smoking status")
+
+age_smokeplot
+```
+
+Results The full cohort study comprised of 10,000 participants aged 18 - 70 years at enrolment. Descriptive statistics we have a low mortality rate (8.1%) in this cohort. It also shows that there are higher numbers of deaths among the smokers than the non-smokers. Additionally, it is shown that in general the smokers are younger than the non-smokers (mean 37 vs 47 years). However, the average age is higher within the deaths, compared to the survivors.
+
+Table 1: Summary statistics for smokers and non-smokers
+
+\| Characteristic \| Level \| Overall \| Non-Smoker at enrolment \| Smoker at enrolment \|
+
+\|---------------\|---------------\|---------------\|---------------\|---------------\|
+
+\| N(%) \| \| 10000 (100.0) \| 3922 (39.2) \| 6078 (60.8) \| \| Age at enrolment (years) \| Mean(SD) \| 40.97 (15.40) \| 46.68 (15.19) \| 37.29 (14.37) \| \| \| Median(IQR) \| 39.00 (28.00-54.00) \| 47.00 (34-61) \| 34.00 (25-47) \| \| Sex \| Female \| 5288 (52.9) \| 1942 (49.5) \| 3346 (55.1) \| \| \| Male \| 4712 (47.1) \| 1980 (50.5) \| 2732 (44.9) \| \| Death within 10 years of enrolment \| Survived \| 9190 (91.9) \| 3582 (91.3) \| 5608 (92.3) \| \| \| Died \| 810 (8.1) \| 340 (8.7) \| 470 (7.7) \|
+
+b)  Unadjusted model (3%)
+
+    Fit a logistic regression model relating smoking status to mortality ignoring age and sex.
+
+```{r}
+cohort_mod1 <- glm(d~factor(smoke), family = binomial(link="logit"), data=cohort)
+tidy(cohort_mod1, exp=T, conf.int = T)
+
+```
+
+The odds of death as a smoker are 0.88 times those of non smokers, suggesting a protective effect of smoking. However, there was no evidence for this association (p-value=0.09).
+
+(c) Adjusted model (8%) Fit a logistic regression model relating smoking status to mortality adjusting for age and sex. Here, you may assume that age has a linear effect on mortality on the logit scale.
+
+```{r}
+
+cohort_mod2 <- glm(d~smoke+age+sex, family = binomial(link="logit"), data=cohort)
+summary(cohort_mod2)
+tidy(cohort_mod2, exp=T, conf.int = T)
+
+##For confounding, we need to also check for association of the other cvariates on the exposure varaible smoke
+summary(glm(smoke~age, family=binomial, data=cohort))
+summary(glm(d~age, family=binomial, data=cohort)) ##From the two models, age is a confounder of smoke and d as it is associated with both.
+summary(glm(smoke~sex, family=binomial, data=cohort))
+summary(glm(d~sex, family=binomial, data=cohort)) ##From the two models, sex is a confounder of smoke and d as it is associated with both.
+
+##Run anova to see which of the models is good
+anova(cohort_mod1, cohort_mod2)
+
+```
+
+On adjusting for age and sex, we notice very strong evidence (p-value \<0.0001) of the association of smoking and death within 10 years of enrolment, with smokers having almost twice the odds of death within 10 years as the non-smokers (OR: 1.96; 95% CI 1.67 - 2.31). This indicates the confounding effect of age and sex on the relationship of smoking and death. This explains the confounding effect identified from the descriptive analysis where we had more deaths among the older people, less deaths proportion among the smokers and yet the younger people were the highest smokers. Age was strongly associated with increasing mortality in the cohort (OR: 1.084, 95% CI 1.078 - 1.091).
+
+The anova test shows us that the adjusted model fits the data better and hence can be used to model predictions of deaths within the cohort.
+
+Model including interactions (10%)
+
+Add two-way interaction terms to your model in c) to allow the effect of smoking on mortality to depend on age and sex.Present results relating to the effect of smoking from each of your models in one or more tables and interpret these. Use graphs to display how relevant predicted probabilities of death differ by age and sex for the models in c) and d).
+
+```{r}
+#Fitting the model with interactions
+cohort_mod3 <- glm(d~(smoke*age)+(smoke*sex), family = binomial(link="logit"), data=cohort) ##Is the association between smoking and mortality age dependent, and is the association between smoking and mortality sex dependent?
+summary(cohort_mod3) ##The interaction p-value of 0.898 indicates that we have no interaction in this relationship.
+tidy(cohort_mod3, exponentiate = T)
+tidy(cohort_mod3, exponentiate = T, conf.int = T)
+
+##Graphs
+##Getting the conditional probabilities
+cohort_pred1 <- expand.grid(sex = c("female", "male"), smoke = c("non-smoker", "current smoker"), age=cohort$age)
+##MODEL 3
+# Get predicted probabilities (type = "response" gives Pr(Y=1))
+cohort_pred1$prob <- predict(cohort_mod3, newdata = cohort_pred1, type = "response")
+View(cohort_pred1)
+
+###PLOT
+int_mod3_plot <- ggplot(cohort_pred1, aes(x = age, y = prob, colour = smoke, linetype=sex)) +
+  geom_line(size = 1) +
+  labs(
+    x = "Age (years)",
+    y = "Predicted probability of death",
+    colour = "Smoking status",
+    #title = "Predicted probability of death by age,\nsmoking status and sex (with interactions)"
+    title = "Predicted probability of death \n(with interactions)"
+  ) +
+  theme_bw()
+
+
+###MODEL 2
+cohort_pred1$prob2 <- predict(cohort_mod2, newdata = cohort_pred1, type = "response")
+View(cohort_pred1)
+
+###PLOT
+mod2_plot <- ggplot(cohort_pred1, aes(x = age, y = prob2, colour = smoke, linetype=sex)) +
+  geom_line(size = 1, show.legend = F) +
+  labs(
+    x = "Age (years)",
+    y = "Predicted probability of death",
+    colour = "Smoking status",
+    #title = "Predicted probability of death by age,\nsmoking status and sex (without interactions)"
+    title = "Predicted probability of death \n(without interactions)"
+  ) +
+  theme_bw()
+
+#Using plot_grid to create 1 grid for the plots
+shared_legend <- get_legend(int_mod3_plot + theme(legend.position = "right"))
+p2_clean <- int_mod3_plot + theme(legend.position = "none", axis.title.y = element_blank())
+p1_clean <- mod2_plot + theme(legend.position = "none", axis.title.y = element_blank())
+
+plot_row <- plot_grid(p1_clean, p2_clean, labels = c("A", "B"), ncol = 2)
+y_label <- ggdraw() + draw_label("Probability of Death", angle = 90, size = 12)
+grid_with_label <- plot_grid(y_label, plot_row, rel_widths = c(0.05, 1))
+final_plot <- plot_grid(grid_with_label, shared_legend, rel_widths = c(1, 0.2))
+
+print(final_plot)
+
+
+```
+
+Coefficients for the Interaction model term estimate std.error statistic p.value <chr> <dbl> <dbl> <dbl> <dbl> 1 (Intercept) 0.000750 0.357 -20.2 1.60e-90 2 smokecurrent smoker 1.44 0.419 0.865 3.87e- 1 3 age 1.09 0.00580 15.0 5.53e-51 4 sexmale 1.34 0.120 2.46 1.40e- 2 : The odds of death within males is higher than females by 34%. 5 smokecurrent smoker:age 1.00 0.00697 0.270 7.87e- 1 6 smokecurrent smoker:sexmale 1.45 0.160 2.32 2.06e- 2 : The excess risk of death within 10 years associated with being a smoker is higher within the males by 45%. While age is associated with death (which makes sense), the risk of death associated with smoking is not affected by the change in age of an individual (OR 1.00; p-value=0.787)
+
+From the interaction model, we notice evidence of a smoking and sex interaction (\beta=0.369; 95% CI: 0.057, 0.682; p-value=0.021) indicating that the effects of smoking on mortality differ by sex, with excess risk higher in males. Additionally, we notice weak evidence of a smoking and age interaction (\beta=0.002; 95% CI: -0.012, 0.015; p-value=0.787). However, figure 1 shows that there a variation in the effect of smoking on 10-year mortality across the different ages.
+
+Table 2: Crude and adjusted results for effect of smoking on mortality
+
+| Model | Odds Ratio estimate for Smoking (95% CI) | p-value |
+|----|----|----|
+| Unadjusted | 0.88 (0.76, 1.02) | 0.09 |
+| Adjusted without interactions | 1.96 (1.67, 2.31) | \<0.001 |
+| Adjusted with interactions | 1.44 (0.64, 3.32) | 0.387 |
+
+(e) Proportion of preventable deaths (6%) Use your model with interactions to estimate what proportion of deaths would have been prevented had no one smoked. You are not required to come up with a 95% confidence interval. Report the estimate and comment on your findings
+
+```{r}
+
+cohort <- smodo2026 %>% dplyr::select(id, sex, age, smoke, d)
+
+#Using model cohort_mod3 to get proportion of preventable deaths given no one smoked. We are using a marginal effect for smoke=non-smoker
+
+#Create a dataset where all values of smoke are non-smoker and we predict an estimate based on the modell 3
+cohort_pred2 <- subset(cohort, select = c(sex, smoke, age))
+cohort_pred2$smoke <- 0
+#Manually calculate predicted probabilities for each individual
+cohort_pred2$prednon = with(cohort_pred2, plogis(-7.195613+0.362930*smoke+0.087075*age+0.001880*smoke*age*smoke+0.294445*sex+0.369424*smoke*sex))
+
+##Obtain predicted probability of death for participants in the dataset with no smokers
+cohort_pred2$prednon = with(cohort_pred2, plogis(-7.195613+(0.362930*smoke)+(0.087075*age)+(0.001880*smoke*age)+(0.294445*sex)+(0.369424*smoke*sex)))
+
+#Proportion of preventable deaths (basically deaths that would not have occurred if no one smoked)
+prop1 <- (sum(cohort$d)-sum(cohort_pred2$prednon))/sum(cohort$d) #Difference of observed deaths from predicted deaths divided by the observed deaths.
+
+#Print the result
+cat("Proportion of preventable deaths if no one smoked:", round(prop1, 4),"(", round(prop1 * 100, 2), "%)\n")
+
+```
+
+The proportion of deaths that would have been prevented had no one smoked is 24.3% (Estimate: 0.2428). With this, we indicate that had smoking been removed at the start of the cohort, based on the model, approximately 24.3% of the observed deaths in this cohort would not have happened.
+
+Study 2 - Unmatched case-control study Methods
+
+Descriptive analysis was done using tabulations for the means, standard deviations, median and IQ of age, overall and by the smoking status at enrolment. Similarly, counts and frequencies for sex at enrolment and death within 10 years were provided, overall and by the smoking status. Logistic regression models were fitted to assess the effect of smoking on 10-year mortality in the cohort study. Line graphs were plotted with predicted probability of mortality against age for smokers and non-smokers by sex, based on the unadjusted and adjusted model (with interactions).
+
+Similar to study 1,
+
+```{r}
+#Keeping the data for the unmatched study.
+unmatched <- smodo2026 %>% dplyr::filter(study2==1) %>% dplyr::select(id, sex, age, smoke, d, study2)
+View(unmatched)
+
+#Proportion of study 2 people from the overall study
+prop.table(table(smodo2026$study2))
+
+##Descriptives for study 2
+tab_unmatched<-CreateTableOne(
+  vars=c("sex","age","smoke","d","study2"),
+  data=unmatched,
+  strata = "d",
+  factorVars=c("sex","smoke","d","study2"),
+  includeNA = T,
+  test = F,
+  addOverall = T
+)
+print(tab_unmatched,showAllLevels = T)
+
+tab_unmatched1<-CreateTableOne(
+  vars=c("sex","age","smoke","d","study2"),
+  data=unmatched,
+  strata = "smoke",
+  factorVars=c("sex","smoke","d","study2"),
+  includeNA = T,
+  test = F,
+  addOverall = T
+)
+print(tab_unmatched1,showAllLevels = T)
+
+#Plots
+#Smoking status vs age
+#Smoking status vs sex
+table(unmatched$sex, unmatched$smoke) ##from gere we see that we have more smokers that are male, but we also have more non-smokers as male
+#Smoking status vs death
+table(unmatched$smoke, unmatched$d) ##We can see that we have more survivors as the smokers, and we can also see that we have more deaths in the non-smokers
+##Death by sex
+table(unmatched$d, unmatched$sex)
+
+or <- (500*340)/(310*470) #odds of smokers dieing are 16.7% higher than non-smokers (OR: 1.167; 95% CI)
+
+##The odds ratio of a sm
+
+```
+
+Results The unmatched case-control study had 1620 participants representing 16.2% of the individuals in the whole cohort. 50% (n=810) of the participants were deaths and the remaining 50% were survivors (controls). The cases were older than the survivors (mean age 56.75 vs mean age 39.20). Additionally, the proportion of deaths was higher within the males (n=467, 57.0%). However, a higher proportion of survivors were smokers compared to the cases (61.7% vs 58.0%). This is probably explained by the fact that the sample contains a lot of young smokers that haven't experience the long term negative effects of smoking.
+
+Compare death
+
+b)  Models
+
+```{r}
+unmatched_mod1 <- update(cohort_mod2, data=unmatched)
+summary(unmatched_mod1)
+tidy(unmatched_mod1, exp=T, conf.int = T)
+
+#Comparing the estimates and standard errors
+# Compare precision (Standard Errors)
+cohort_mod2 <- glm(d~smoke+age+sex, family = binomial(link="logit"), data=cohort)
+summary(cohort_mod2)$coefficients["smoke", "Estimate"]
+summary(unmatched_mod1)$coefficients["smoke", "Estimate"]
+summary(cohort_mod2)$coefficients["smoke", "Std. Error"]
+summary(unmatched_mod1)$coefficients["smoke", "Std. Error"]
+
+
+cat("For the cohort model: The estimate is", exp(summary(cohort_mod2)$coefficients["smoke", "Estimate"]),". And the Standard error is", summary(cohort_mod2)$coefficients["smoke", "Std. Error"],". \n")
+cat("For the case-control model: The estimate is", exp(summary(unmatched_mod1)$coefficients["smoke", "Estimate"]),". And the Standard error is", summary(unmatched_mod1)$coefficients["smoke", "Std. Error"],". \n")
+##We have almost identical estimates because the data for the case control study is drawn from the cohort sample.
+##Looking at the the standard errors and the confidence intervals comparing the cohort and the unmatched case control, we see that we have smaller SEs and tighter CIs for the cohort because of the fact that we have more data/observations.
+
+```
+
+While the estimates of the odds ratio are not very different (1.96 vs 1.82), the standard error of the case-control study is larger (0.129) than the cohort study (0.083) because the sample size is much smaller (Table 3). The similarity of the odds ratio estimates is due to the preservation of the case-control sampling on exposure-outcome associations.
+
+Table 3: Smoking effects from adjusted cohort model vs the case-control model
+
+| Study                  | Odds Ratio estimate | Standard Error | Sample size |
+|------------------------|---------------------|----------------|-------------|
+| Cohort                 | 1.96                | 0.083          | 10,000      |
+| Unmatched Case-control | 1.82                | 0.129          | 1,620       |
+
+c\. Proportion of preventable deaths
+
+```{r}
+# 
+# unmatched_mod2 <- update(unmatched_mod1, data=unmatched_pred_all)
+# summary(unmatched_mod2$fitted.values[unmatched_pred_all$smoke==0])
+
+
+unmatched_pred_all <- subset(smodo2026, select = c(sex, smoke, age))
+table(unmatched_pred_all$sex)
+unmatched_pred_all$smoke <- 0
+#Manually calculate predicted probabilities for each individual
+unmatched_pred_all$prednon = with(unmatched_pred_all, plogis(-4.859638+0.598740*smoke+0.087520*age+0.499927*sex))
+mean(unmatched_pred_all$prednon)
+
+
+#now set treatment to 1
+unmatched_pred_all$smoke <- 1
+unmatched_pred_all$predsmokeall = with(unmatched_pred_all,plogis(-4.859638+0.598740*smoke+0.087520*age+0.499927*sex))
+mean(unmatched_pred_all$predsmokeall)
+
+#calculate the mean predicted outcome in each scenario
+mean(pred_covs$pred0)
+mean(pred_covs$pred1)
+
+#risk difference is
+mean(unmatched_pred_all$predsmokeall) - mean(unmatched_pred_all$prednon)
+mean(unmatched_pred_all$prednon)/(mean(unmatched_pred_all$prednon)+mean(unmatched_pred_all$predsmokeall))
+
+
+(sum(cohort$d)-sum(unmatched_pred_all$prednon))/sum(cohort$d)
+
+##Probability of preventable deaths is 0.318 if no one smoked. Basically preventable deaths proportion is 3% of all the participants of the original dataset
+
+#Manually calculate predicted probabilities for each individual
+cohort_pred2$prednon = with(cohort_pred2, plogis(-4.859638+0.598740*smoke+0.087520*age+0.499927*sex))
+
+##Obtain predicted probability of death for participants in the dataset with no smokers
+cohort_pred2$prednon = with(cohort_pred2, plogis(-7.195613+(0.362930*smoke)+(0.087075*age)+(0.001880*smoke*age)+(0.294445*sex)+(0.369424*smoke*sex)))
+
+#Proportion of preventable deaths (basically deaths that would not have occurred if no one smoked)
+prop1 <- (sum(cohort$d)-sum(cohort_pred2$prednon))/sum(cohort$d) #Difference of observed deaths from predicted deaths divided by the observed deaths.
+
+
+
+
+# PAF for Study 2
+n_total <- 10000
+n_cases <- sum(smodo2026$d) # All cases included
+n_controls_total <- n_total - n_cases
+n_controls_study2 <- sum(unmatched$d == 0)
+
+# Sampling weight for controls
+w_control <- n_controls_total / n_controls_study2
+
+# Calculate PAF using weighted sums
+smokers_cases <- sum(unmatched$smoke == 1 & unmatched$d == 1)
+non_smokers_cases <- sum(unmatched$smoke == 0 & unmatched$d == 1)
+smokers_controls <- sum(unmatched$smoke == 1 & unmatched$d == 0) * w_control
+non_smokers_controls <- sum(unmatched$smoke == 0 & unmatched$d == 0) * w_control
+
+risk_non_smokers <- non_smokers_cases / (non_smokers_cases + non_smokers_controls)
+risk_total <- n_cases / n_total
+
+paf_2 <- (risk_total - risk_non_smokers) / risk_total
+print(paste("Estimated PAF (Study 2):", round(paf_2, 4)))
+
+
+##OR
+n_cases <- sum(unmatched$d == 1)
+n_controls <- sum(unmatched$d == 0)
+
+cat("Number of cases:", n_cases, "\n")
+cat("Number of controls:", n_controls, "\n")
+
+# In the original cohort, we know:
+# - Total size: 10,000
+# - Number of deaths: n_cases (since all cases are included)
+
+# Estimate prevalence of smoking in cases and controls
+# Using the model to get predicted probabilities
+pred2_obs <- predict(unmatched_mod1, type = "response")
+
+
+
+
+
+#####
+pred_covs <- subset(cohort,select=c(x,z))
+#set treatment to 0
+pred_covs$x <- 0
+#manually calculate predicted probabilities for each individual
+#use plogis(x)=exp(x)/(1+exp(x))
+pred_covs$pred0 = with(pred_covs,
+plogis(-2.60269+0.7308873*x+1.607874*z-0.5245292*x*z))
+#now set treatment to 1
+pred_covs$x <- 1
+pred_covs$pred1 = with(pred_covs,
+plogis(-2.60269+0.7308873*x+1.607874*z-0.5245292*x*z))
+#calculate the mean predicted outcome in each scenario
+mean(pred_covs$pred0)
+mean(pred_covs$pred1)
+#risk difference is
+mean(pred_covs$pred1)-mean(pred_covs$pred0)
+
+
+##Why are they using the intercept for the cohort?
+###preventable is 0.223133
+#Using Joe's method
+#We need Pr(𝑌 = 1|𝑑𝑜(𝑋 = 0)) ~Probability of death if everyone had not smoked at the start of the cohort
+predict(unmatched_mod1,newdata=unmatched_pred_all,type="response") ##This gives us conditional probabilities
+
+avg_predictions(unmatched_mod1,
+variables = "smoke")
+
+
+
+```
+
+Study 3 - matched case-control study a) Preliminaries - Check for the number of sets
+
+Methods
+
+Study 3 matched each of 810 deaths to one survivor based on sex (exact) and age (within 5 years), creating 810 matched pairs (1,620 participants).
+
+Conditional logistic regression analyzes within-pair variation, effectively controlling for matching factors. For matched pairs, the smoking effect can be estimated from discordant pairs (where case and control differ in smoking status) using McNemar’s approach. Two models were fitted: (1) smoking only; (2) smoking adjusted for age.
+
+```{r}
+#Keeping the data for the matched study.
+matched <- smodo2026 %>% dplyr::filter(study3==1) %>% dplyr::select(id, sex, age, smoke, d, study3, match_set)
+View(matched)
+matched <- arrange(matched, match_set)
+
+
+head(matched, 10)
+
+# tab_matched<-CreateTableOne(
+#   vars=c("sex","age","smoke","d","study3", "match_set"),
+#   data=matched,
+#   factorVars=c("sex","smoke","d","study3", "match_set"),
+#   includeNA = T,
+#   test = F,
+#   addOverall = T
+# )
+# print(tab_matched,showAllLevels = T)
+
+
+##Summarising the smoking status numbers for the cases and controls
+table(matched$smoke[matched$d==1]) #We have 470 smokers who are cases; and 340 non-smokers who are cases
+table(matched$smoke[matched$d==0]) ##We have 337 smokers who survived; and 473 non-smokers who survied
+#From this summary we can see that more smokers died, and more non-smokers survied. Smokers are more in the deaths.
+
+#
+matched <- matched %>% mutate(
+  sex = factor(sex, levels = c(0,1), labels = c("female", "male")),
+  smoke = factor(smoke, levels = c(0,1), labels = c("non-smoker", "current smoker")),
+  d = factor(d, levels = c(0,1), labels = c("survived", "died")),
+  
+)
+
+#Looking at the age of the cases and the controls ##this isnt relevant since they are matched by age. However, with this we confirm that they are in the same range and hence no difference
+ggplot(matched, aes(x = d, y = age)) +
+  geom_boxplot() +
+  labs(
+    x = "Case status",
+    y = "age"
+)
+t.test(age~d, data = matched) ##confirm no difference in age between cases and controls.
+
+
+## Age and smoking
+ggplot(matched, aes(x = smoke, y = age)) + ##from this plot we can see that the smokers were actually younger than the non-smokers
+  geom_boxplot() +
+  labs(
+    x = "Smoking status",
+    y = "age"
+)
+t.test(age~smoke, data = matched) ##we have evidence that there is a difference in age between smokers and non-smokers
+
+#Histogram of Age Differences in Matched Pairs (for Study 3 only): Demonstrates matching effectiveness (mean difference 2.6 years, all ≤5 years, as per design). Useful for preliminaries to confirm no major mismatches on age/sex.
+# ggplot(diff_df, aes(x = age_diff)) + 
+#   geom_histogram(binwidth = 1) + 
+#   labs(x = "Absolute Age Difference in Matched Pairs (years)", y = "Frequency") + 
+#   theme_minimal()
+
+##Mortality by sex
+
+##Mortality by smoking
+
+
+
+
+```
+
+We can see that we have two rows for each set. The first row of the data is for the case and the second row is for the control.
+
+```{r}
+matched <- smodo2026 %>% dplyr::filter(study3==1) %>% dplyr::select(id, sex, age, smoke, d, study3, match_set)
+#Treating the smoking as the dependet variable
+matched_mod1 <- glm(smoke~d, data = matched)
+summary(matched_mod1) 
+tidy(matched_mod1, exponentiate = T, conf.int = T) ##This approach is invalid but we have evidence that peple who who died had higher odds of being smokers that those who survived.
+
+summary(glm(smoke~d+factor(match_set), data = matched))$coefficients[1:2,] ##adjusting for the matching variable does not change the estimate for the log odds of smoking betweeen the deaths and survivors. additionally, the SE in th new model has slightly increased after accounting for paired nature of the data.
+
+##From the two models, we can see what we expect. We had higher possibility of smoking among the people that died within 10 years.
+#But we can do some conditional logistic regression to make our data more suitable for this matched case! See below!
+
+```
+
+Conditional regression model!
+
+```{r}
+##First, we reshape the data to make it suitable for the analysis. Reshape on case status
+matchedWide <- reshape(matched, v.names=c("smoke", "age"), timevar="d",
+                       idvar="match_set",direction="wide")
+table(matchedWide$smoke.died,matchedWide$smoke.survived) ###We tabulate and work with the discordant pairs to do the McNemar's test
+binom.test(276,(143+276)) ##from our McNemar's test, we can say that with the p-value<0.001, the two population proportions are actually different (NUll is that the population proportions are the same)
+#ODDS RATIO FROM Mantel Hanzel is 276/143: odds of death for a smoker: 1.93; indicating that smokers have almost twice the odds of death than non-smokers
+#95% CI for this odds ratio is got from the CI of the binom.test: L <- (0.6111198/(1-0.6111198)); U <- (0.7040425/(1-0.7040425)) -- For the MH, we use the CI from the McNemar's test to generate the CI of the MH Odds Ratio Estimate
+#1.93(95%CI: 1.57 - 2.37)
+##From this, we can say that the odds of being a case among smokers is 1.93 times the odds of being a case among non-smokers conditional on sex and age, as this is a matched study. The odds ratio doesnt contain the 1, hence we can say that there is evidence at the 5% level.
+#However, just like below, the mcNemar's test is looking for an association basically and it gives the conditional odds ratio where conditioning is on the set variable.
+##
+
+
+##The results we get below are a confirmation of what we got above!
+##Smoking as only predictor: Now here we look at the conditional logistic regression. For conditional regression, we need to use the clogit function from the survival library. Also, not that we do not change the shape of the data
+matched_clogit <- clogit(d~smoke+strata(match_set), data = matched) ##with the clogit, we have
+summary(matched_clogit) #Being a smoker multiplies the odds of death by 1.93 (95% CI 1.577, 2.362) conditional on sex and age at enrolment. A likelihood ratio test provides very strong evidence (p<0.0001) of the association between smoking and mortality (conditional on sex and age at enrolment)
+
+#Extending the model to adjust for age
+matched_clogit1 <- clogit(d~factor(smoke)+age+strata(match_set), data = matched)
+summary(matched_clogit1) ##Including age in the model considers the residual confounding that could come up because of the age range given (cases were matched to controls within a range of 5 years). However, this has very little effect on the odds ratio and standard error confirming that the matching on age successfully controlled for confounding in this study.
+
+```
+
+The conditional OR for smoking in Study 3 effectively controls for the matching factors (age and sex). Precision is generally higher than Study 2 for the smoking effect because matching on strong confounders like age increases efficiency, though the "crude" age effect is no longer directly estimable
+
+Discussion
+
+Summary of results from the three studies
+
+Table 4
+
+| Study                  | Col2               | p-value | Sample size |
+|------------------------|--------------------|---------|-------------|
+| Cohort                 | 1.96 (1.67 - 2.31) | \<0.001 | 10,000      |
+| Unmatched case-control | 1.82 (1.42 - 2.35) | 0.004   | 1,620       |
+| Matched case-control   | 1.93(1.58 - 2.36)  | \<0.001 | 1,620       |
+
+From the odds ratio estimates of the three studies, we can see that the odds ratios are indicative of an approximately double odds of mortality among the smokers. The approach of using the case-control data in comprison to working with a cohort dataset is confirmed valid, given the estimates.
+
+**Discussion and conclusions**
+
+[Summary of findings]{.underline}
+
+-   From the analyses of the three studies, we see that smoking significantly increases the odds of mortality.
+
+-   Using the unmatched case-control study also gave valid estimates for the odds ratio estimates for the effect of smoking and yet the numbers were way less than for the cohort, indicating efficiency of the study design.
+
+-   The matched case-control study also provides valid estimates for the effect of smoking, while handling confounding by sex and age. These estimates are also more robust.
+
+[Implications of the results]{.underline}
+
+-   The proportions of preventable deaths indicate that a large percentage of the deaths could be prevented if smoking was actually removed at the start of the study
+
+[Limitations]{.underline}
+
+-   For our study and analysis, we assumed a linear effect of age on the estimates of the mortality prediction.
+
+-   Secondly, we assumed that all participants in the study were followed up to 10 years (the survivors). this is an ideal situation which may not be valid in the real world.
+
+-   We also pose a risk of having an incorrect estimate due to other unmeasured confounders that could not have been considered for this analysis.
+
+Conclusion: The matched case-control study (Study 3) yields a higher OR because it estimates the conditional effect within matched strata (primarily older ages where smoking effects are stronger), while Studies 1 and 2 estimate the marginal population-average effect.

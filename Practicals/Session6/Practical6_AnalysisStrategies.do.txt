@@ -1,0 +1,154 @@
+use https://www.stata-press.com/data/r16/cattaneo2, clear
+
+*****************************
+**Question 1
+*Exposure X: mbsmoke
+*Outcome Y: lbweight
+*Potential confounders Z: mmarried, mhisp, fhisp, foreign, alcohol, deadkids, mage, medu, fage, fedu, monthslb, order, mrace, frace, birthmonth
+*To be excluded: bweight, nprenatal, msmoke, prenatal, prenatal1, fbaby
+*****************************
+
+describe
+
+summ
+
+tab order
+replace order=1 if order==0
+replace order=3 if order>=3
+
+rename deadkids prevnewborndeath
+
+*****************************
+**Question 2
+*****************************
+tab lbweight
+
+tab mbsmoke
+
+tab mbsmoke lbweight, row
+
+logistic lbweight i.mbsmoke 
+
+margins, dydx(mbsmoke)
+
+*****************************
+**Question 3
+**full model
+*****************************
+
+logistic lbweight i.mbsmoke i.mmarried i.mhisp i.fhisp i.foreign i.alcohol i.prevnewborndeath mage medu fage fedu monthslb i.order i.mrace i.frace i.birthmonth
+
+margins mbsmoke
+
+margins, dydx(mbsmoke)
+
+
+*****************************
+**Question 4
+**forwards and backwards selection
+*****************************
+
+**forwards selection: pe(0.1)
+stepwise, forward pe(0.1) lockterm1: logistic lbweight (i.mbsmoke) i.mmarried i.mhisp i.fhisp i.foreign i.alcohol i.prevnewborndeath mage medu fage fedu monthslb (i.order) i.mrace i.frace (i.birthmonth)
+
+*fit model including the selected variables
+logistic lbweight i.mbsmoke i.mmarried i.mrace
+
+margins, dydx(mbsmoke)
+
+**forwards selection: pe(0.2)
+stepwise, forward pe(0.2) lockterm1: logistic lbweight (i.mbsmoke) i.mmarried i.mhisp i.fhisp i.foreign i.alcohol i.prevnewborndeath mage medu fage fedu monthslb (i.order) i.mrace i.frace (i.birthmonth)
+
+**backwards selection pr(0.1)
+stepwise, pr(0.1) lockterm1: logistic lbweight (i.mbsmoke) i.mmarried i.mhisp i.fhisp i.foreign i.alcohol i.prevnewborndeath mage medu fage fedu monthslb (i.order) i.mrace i.frace (i.birthmonth)
+
+**backwards selection pr(0.05)
+stepwise, pr(0.1) lockterm1: logistic lbweight (i.mbsmoke) i.mmarried i.mhisp i.fhisp i.foreign i.alcohol i.prevnewborndeath mage medu fage fedu monthslb (i.order) i.mrace i.frace (i.birthmonth)
+
+*****************************
+**Question 5
+**change in estimates
+*****************************
+
+*****
+*start without any potential confounders added
+logistic lbweight i.mbsmoke, coef
+
+*calculate 10% change in coefficient for mbsmoke
+display 0.1*0.8751729 
+display 0.8751729-0.1*0.8751729 
+display 0.8751729+0.1*0.8751729 
+
+*****
+*add each potential confounder one by one
+*only two variables change the coefficient by 10% or more - mmarried and medu - with mmarried giving the biggest change. 
+foreach var in mmarried mhisp fhisp foreign alcohol prevnewborndeath mage medu fage fedu monthslb mrace frace {
+	logistic lbweight i.mbsmoke `var', coef
+}
+logistic lbweight i.mbsmoke i.order , coef
+logistic lbweight i.mbsmoke i.birthmonth, coef
+
+*****
+*add mmarried and consider each remaining potential confounder one by one
+logistic lbweight i.mbsmoke mmarried, coef
+
+*calculate 10% change in coefficient for mbsmoke
+display 0.1*0.6616985
+display 0.6616985-0.1*0.6616985
+display 0.6616985+0.1*0.6616985
+
+*only mrace changes the coefficient for mbsmoke by 10% or more
+foreach var in mhisp fhisp foreign alcohol prevnewborndeath mage medu fage fedu monthslb mrace frace {
+	logistic lbweight i.mbsmoke mmarried `var', coef
+}
+logistic lbweight i.mbsmoke mmarried i.order , coef
+logistic lbweight i.mbsmoke mmarried i.birthmonth, coef
+
+*****
+*add mrace and consider each remaining potential confounder one by one
+logistic lbweight i.mbsmoke mmarried mrace, coef
+
+*calculate 10% change in coefficient for mbsmoke
+display 0.1*0.7373471
+display 0.7373471-0.1*0.7373471
+display 0.7373471+0.1*0.7373471
+
+*none of the remaining variables changes the coefficient for mbsmoke by 10% or more
+foreach var in mhisp fhisp foreign alcohol prevnewborndeath mage medu fage fedu monthslb mrace frace {
+	logistic lbweight i.mbsmoke mmarried i.mrace `var', coef
+}
+logistic lbweight i.mbsmoke mmarried i.mrace i.order , coef
+logistic lbweight i.mbsmoke mmarried i.mrace i.birthmonth, coef
+
+**Final model is 
+logistic lbweight i.mbsmoke mmarried mrace
+
+margins mbsmoke
+
+margins mbsmoke, dydx(mbsmoke)
+
+*****************************
+**Question 6
+**double-selection
+*****************************
+
+*p-value for selection: 0.1/(K*log(n))
+display 0.1/(15*log(4642))
+
+*step 1
+*selects mrace, mmarried
+stepwise, forward pe(.00078962): logistic lbweight i.mmarried i.mhisp i.fhisp i.foreign i.alcohol i.prevnewborndeath mage medu fage fedu monthslb (i.order) i.mrace i.frace (i.birthmonth)
+
+*step 2
+*selects mmarried, alcohol, medu, monthslb,mrace, mhisp, prevnewborndeath, fedu
+stepwise, forward pe(.00078962): logistic mbsmoke i.mmarried i.mhisp i.fhisp i.foreign i.alcohol i.prevnewborndeath mage medu fage fedu monthslb (i.order) i.mrace i.frace (i.birthmonth)
+
+*step 3
+**included variables: mmarried, alcohol, medu, monthslb, mrace, mhisp, prevnewborndeath, fedu
+**excluded variables: fhisp, foreign, mage, fage, order, frace, birthmonth
+logistic lbweight i.mbsmoke i.mmarried i.mhisp i.alcohol i.prevnewborndeath medu fedu monthslb i.mrace, robust
+
+*margins
+margins mbsmoke, vce(unconditional)
+margins, dydx(mbsmoke) vce(unconditional)
+

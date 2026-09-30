@@ -1,0 +1,149 @@
+---
+title: "Session15"
+author: "Paddy Kafeero"
+date: "2026-02-09"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+#source("C:/Users/PaddyK/Desktop/Random_r_Code/src/setup.R")
+
+```
+
+Aims
+• Tounderstand how to interpret coefficients from multinomial and ordinal logistic regres
+sion models.
+• To understand how to calculate estimated probabilities from multinomial and ordinal
+logistic regression models.
+• To understand how to compare the fits of multinomial and ordinal logistic regression
+models
+3. What is the best way to model age (categorical or continuous)?
+
+```{r}
+multi <- rio::import("C:/Users/PaddyK/Desktop/MSc Medical Statistics/Stat_Models_Discrete/Practicals/Session15/multinomial.csv")
+View(multi)
+str(multi)
+```
+
+
+Question 1
+```{r}
+multi$sbpcat <- cut(multi$sbp,
+                    breaks = c(0, 120, 140, 160, 300),
+                    labels = c("Normal", "Prehypertension", "High1", "High2"),
+                    right = FALSE,
+                    ordered = T) # make it ordered
+prop.table(table(multi$sbpcat))
+
+
+#Centering age
+multi$cen_age <- multi$ageyrs- 50
+
+```
+
+
+Question 2
+```{r}
+library(nnet)
+multimod1 <- multinom(sbpcat~sex+cen_age, data=multi)
+summary(multimod1)
+
+##1 unit increase of age conditon
+
+```
+
+
+
+Question 3
+```{r}
+##Model
+#
+##For a female aged 70 years: Whats the probability of SBP High 1?
+#age=70, sex==1
+
+exp(-1.5405251+(0.07866921*70))/(1+(exp(-1.5405251+(0.07866921*70))+exp( -2.3134874+( 0.10677553*70))))
+
+#Probability is 23%
+```
+
+
+Question 4
+```{r}
+#Females
+femaledata <- data.frame(cen_age=multi$cen_age, sex="Female", ageyrs=multi$ageyrs, sbpcat=multi$sbpcat)
+femaledata$fitted <- predict(multimod1, newdata = femaledata )
+
+fitted_df <- cbind(multi, fitted(multimod1))
+head(fitted_df)
+
+
+# Filter females
+females <- fitted_df %>% 
+  filter(sex == "female") %>% 
+  select(cen_age, starts_with("prob"))
+
+# Convert to long format
+fem_long <- females %>%
+  pivot_longer(cols = starts_with("prob"),
+               names_to = "sbp_category",
+               values_to = "probability")
+
+
+# Plot
+ggplot(fem_long, aes(x = cen_age, y = probability, colour = sbp_category)) +
+  geom_line() +
+  labs(title = "Predicted SBP Category Probabilities vs Age (Females)",
+       x = "Centred age",
+       y = "Predicted probability")
+
+
+plot( femaledata$cen_age, femaledata$fitted)
+ggplot(femaledata, aes(x = ageyrs, y = fitted)) +  geom_line(size = 1)
+
+```
+For the plots.
+As you get older you are more linkely to get into prehyper and then leave.
+
+
+Question 5
+```{r}
+ordmod1 <- polr(sbpcat~sex+cen_age, data=multi)
+summary(ordmod1)
+```
+logit(P(Y≤k))=θk​−(0.27952⋅sexMale+0.05744⋅cen_age)
+
+
+Question 6
+```{r}
+#Woman aged 70 (centered is 20) who is in SBP cat 3
+exp( 1.8744-(0.05744*20)) - exp( -0.1949-(0.05744*20))
+
+```
+
+
+
+Question 7
+```{r}
+
+```
+
+
+Question 8
+```{r}
+
+```
+
+
+For the ordinal model.
+Males have higher logodds 0.27 conditionall on age.
+The older you are conditonal on seex the more likely you are to have SBP.
+
+
+
+
+
+
+
+
+

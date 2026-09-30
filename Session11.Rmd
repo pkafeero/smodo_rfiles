@@ -1,0 +1,144 @@
+---
+title: "Session11"
+author: "Paddy Kafeero"
+date: "2026-01-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+source("C:/Users/PaddyK/Desktop/Random_r_Code/src/setup.R")
+
+```
+
+Question 1
+```{r}
+SAheart <- rio::import("C:/Users/PaddyK/Desktop/MSc Medical Statistics/Stat_Models_Discrete/Practicals/Session11/SAheart.csv")
+str(SAheart)
+View(SAheart)
+head(SAheart, 10)
+
+##Logistic model
+logitmle <- glm(chd~sbp+tobacco+ldl+famhist+obesity+alcohol+age, family=binomial, data=SAheart)
+tidy(logitmle, conf.int = T, exponentiate = F)
+
+```
+
+Below, we fit the same model using ridge regression.
+
+Question 2
+```{r}
+library(help="glmnet")
+ridge_fit <- glmnet(model.matrix(logitmle),
+                    SAheart$chd, family = "binomial",
+                    alpha=0) #for ridge regression, alpa is 1 which is considered the ridge penalty
+summary(ridge_fit)
+```
+
+Question 3
+```{r}
+plot(ridge_fit)
+?plot.glmnet() ##we can check and see how to change the plot
+plot(ridge_fit, sign.lambda = 1) #the default plots against -log(lambda) but if we change the  sign.lambda to 1, then the plot is against log(lambda)
+plot(ridge_fit, sign.lambda = 1, label = T) ##shows which of the covariates matches to a line
+#It fits the model at all the  lambdavalues and plots the lambda values against the coefficients.
+```
+what is the plot showing? From our plot we see that there is no variable shrinkage.
+
+
+
+Question 4
+```{r}
+set.seed(789)
+?cv.glmnet()
+cv_fit <- cv.glmnet(model.matrix(logitmle),
+                    SAheart$chd, nfolds = 10, family="binomial", alpha=0)
+plot(cv_fit, sign.lambda = 1) ##this gives us two specil values along the lambda sequence iindicated by the vertical dotted lines.  lambda.min is the value of λ that gives minimum mean cross-validated error, while lambda.1se is the value of λ that gives the most regularized model such that the cross-validated error is within one standard error of the minimum.
+
+
+cv_fit$lambda.min # to get the value of lambda.min and the model coefficients at that value of λ
+cv_fit$lambda.1se
+coef(cv_fit, s = "lambda.min")
+
+```
+
+
+
+Question 5
+```{r}
+coef(cv_fit, s = "lambda.min")
+coef.glmnet(cv_fit, s = "lambda.min") #the coefficeients of the covariates at the value of lambda that are considered to be the best from cross-validation 
+coef.glmnet(cv_fit, s = c(0.0234591,0.3174129)) #coef.glmnet(cv_fit, s = c("lambda.min","lambda.1se"))
+
+```
+
+
+Question 6
+```{r}
+predict.cv.glmnet()
+predict.glmnet()
+ridgepred <- predict(cv_fit, newx=model.matrix(logitmle), s="lambda.min", type="response")
+mlePred <- logitmle$fitted.values
+summary(ridgepred) ##givs fitted probabilities at lambda.min
+sd(ridgepred)
+
+#lookking at the summary of the original fit and the ridge, we see that we have less extreme fitted probabilities
+#The SD in the original is bigger than in the ridge too
+```
+
+
+Question 7
+```{r}
+lasso_fit <- glmnet(model.matrix(logitmle),
+                    SAheart$chd, family = "binomial",
+                    alpha=1)
+plot(lasso_fit, sign.lambda = 1)
+
+##Here we see the shape of the ligns are kind of constant changing. The numbers show predictors being dropped.
+
+```
+
+
+Question 8
+```{r}
+set.seed(789)
+cv_fit_lasso <- cv.glmnet(model.matrix(logitmle),
+                    SAheart$chd, nfolds = 10, family="binomial", alpha=1)
+plot(cv_fit_lasso, sign.lambda = 1) ##shows the estimates at which lambda is optimal.
+cv_fit_lasso$lambda.min
+cat("The value of λ that minimizes the deviance is", cv_fit_lasso$lambda.min)
+
+coef.glmnet(cv_fit_lasso, s = "lambda.min")
+
+##Comparing coefficients with original MLE
+lassopred <- predict(cv_fit_lasso, newx=model.matrix(logitmle), s="lambda.min", type="response")
+mlePred <- logitmle$fitted.values
+summary(lassopred) ##givs fitted probabilities at lambda.min
+sd(lassopred)
+
+summary(mlePred)
+
+```
+
+
+Question 9
+```{r}
+##split for the training dataset and the test dataset
+set.seed(592723)
+n <- dim(SAheart)[1]
+train_idx <- sample(seq_len(n), size = 0.75 * n)
+trainData <- SAheart[train_idx, ]
+testData <- SAheart[-train_idx, ]
+
+
+assess.glmnet()
+```
+
+
+
+
+
+
+
+
+
+

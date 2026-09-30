@@ -1,0 +1,223 @@
+---
+title: "Session2"
+author: "Paddy Kafeero"
+date: "2026-01-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+source("C:/Users/PaddyK/Desktop/Random_r_Code/src/setup.R")
+```
+
+
+Session 2
+```{r}
+load("C:/Users/PaddyK/Desktop/MSc Medical Statistics/Stat_Models_Discrete/Practicals/Session2/lbw.RData")
+summary(lbw)
+View(lbw)
+names(lbw)
+levels(lbw$low)
+tab_many <- function(x){
+  t <- tabyl(x)
+  return(t)
+}
+
+statar::sum_up(lbw)
+
+
+by (lbw,lbw$race,summary)
+
+
+```
+Bwt is what was used to obtain the values of variable `low`
+Outcome (binary): `low`
+Outcome (numerical): `bwt` in grams
+Mother's weight: `lwt` in lbs
+
+Question 2
+```{r}
+##we can create a variable low2 which is 0 and 1
+levels(lbw$low) ##guides us on finding the reference.
+lbw <- lbw %>%  mutate(low2=ifelse(low=="Birthweight >= 2500g", 0, 1))
+
+low_glm <- glm(low~lwt, family = binomial(link="logit"), data=lbw)
+
+summary(low_glm)
+exp(low_glm$coefficients)
+exp(confint.default(low_glm))
+
+##We can pplot the fitted values on a graph to see the trend of probabilities of low birthweight as mother's weight increases.
+plot(lbw$lwt, low_glm$fitted.values)
+#or we can create a smooth line plot
+lwtModPlotData <- data.frame(lwt=lbw$lwt, pihat=low_glm$fitted.values)
+#now order by lwt
+lwtModPlotData <- lwtModPlotData[order(lwtModPlotData$lwt),]
+plot(lwtModPlotData$lwt, lwtModPlotData$pihat, xlab="Weight at last menstural period (lb)", ylab="Probability of low birthweight baby", type="l")
+```
+
+Intercept: The odds of being underweight for are 1 for a mother of 0 lbs.
+Coefficient: -.0140371: the estimated increase in the log odds of a low birthweight baby per 1lb increase in mother’s weight at last menstrual period. The reported p-value for the slope relates to a test of the null hypothesis that the log odds ratio per 1lb increase in mother’s weight is zero, i.e., that the odds ratio equals 1. Here we have evidence (p=0.023) that the odds (and therefore the probability) of a low birthweight baby is associated with mother’s weight.
+
+“There is evidence (𝑝 = 0.023) of an association between mother’s weight and the probability of a low birthweight baby. Odds of a low birthweight baby were estimated to be reduced by 1.4% (95% CI 0.2% to 2.6%) per 1lb increase in mother’s weight at last menstrual period”.
+
+Question 3
+```{r}
+low_glm_est <- broom::tidy(low_glm, exponentiate = F, conf.int = T) ##this will exponentiate the coefficients from the model and give us odds ratios
+##the confidence intervals are not as above because the tidy function uses confint() rather than confint.default(). For a glm confint calculates profile likelihood based confidence intervals, rather than the +/-1.96 SE ones (on the log oddsscale)
+
+```
+
+Question 4
+Using pen and paper and a calculator, calculate the probability that a women who weighs 120lbs (about 54.4kg) has a baby with birth weight less than 2500g 
+```{r}
+prob <- exp(low_glm_est[1,2] + (low_glm_est[2,2]*120))/(1 + exp(low_glm_est[1,2] + (low_glm_est[2,2]*120)))
+plogis(0.25)
+
+```
+Probability is 0.334
+
+
+diving a continuous variable by ten means a 1 unit increase leads to a 10 unit change in the outcome.
+
+Question 5
+```{r}
+predictions(low_glm)
+predictions(low_glm, newdata = datagrid(lwt=120)) ##also gives confidence intervals for the fitted value
+plot_predictions(low_glm, condition = "lwt")
+
+plot(lbw$lwt, low_glm$fitted.values, type = "h")
+```
+The probabity from this mataches the one we have above!
+
+
+Question 6
+```{r}
+levels(lbw$race)
+low_glm_race <- glm(low~lwt + race, family = binomial(link="logit"), data=lbw)
+
+summary(low_glm_race)
+
+
+anova(low_glm, low_glm_race)
+```
+Note that the function is called anova, since the models being passed to it are logistic regressions, not linear regressions, it is not ANOVA, but a likelihood-ratio (deviance) test that is being performed.
+Comparing the fits of these models tests the null hypothesis that race has no independent association with the probability of having a low birthweight baby, after adjusting for mother’s weight. The log-likelihood ratio statistic for this comparison is −2×(−114.35403−−111.63836) = 5.43 which is compared to a chi-square distribution with two degrees of freedom, giving 𝑝 = 0.066. There is some weak evidence that race is independently associated with low birthweight, conditional on mother’s weight
+
+
+
+PART B
+```{r}
+load("C:/Users/PaddyK/Desktop/MSc Medical Statistics/Stat_Models_Discrete/Practicals/Session2/insecticide.RData")
+summary(insecticide)
+View(insecticide)
+names(insecticide)
+sum_up(insecticide)
+
+skimr::skim(insecticide)
+summarytools::dfSummary(insecticide)
+summarytools::descr(insecticide)
+psych::describe(insecticide)
+
+table(insecticide$dosegroup)
+table(insecticide$dose)
+
+```
+There are no missing values. There are 481 insects, with approximately 60 insects in each of the dose groups.
+
+Question 2
+```{r}
+insect_dea <- glm(y~dose, family=binomial(link = "logit"), data = insecticide)
+summary(insect_dea)
+
+```
+There is evidence of an increasing  risk of death with increasing dose. p-value<0.001.
+The Wald test of the linear term has a z-score of 11.65, and 𝑝 < 0.001. So we have strong evidence of increasing risk of death with increasing dose
+
+Question 3
+```{r}
+exp(insect_dea$coefficients)
+exp(confint.default(insect_dea))
+```
+There is strong evidence that the probability of death increases with increasing CS2 dose (𝑝 < 0.001). Odds of death are estimated to increase by 27% (95% confidence interval 22% to 32%) per unit mg/l increase in dose
+
+Question 4
+```{r}
+exp(-14.0864 + 0.2366*55)
+0.3418443/(1+0.3418443)
+```
+The probability is 0.254
+
+The estimated probability of death at a dose of 55 mg/l is given by the following.
+logit( ̂𝜋𝑖) = −14.0864 + (0.2366 × 55) = −1.074
+and so
+𝜋𝑖 = 𝑒−1.0734/(1 + 𝑒−1.0734) = 0.254.
+$\pi_i$
+
+
+Question 5
+```{r}
+predictions(insect_dea, newdata = datagrid(y=0.5))
+predictions(insect_dea)
+```
+The dose that, on the basis of this model, would lead to a 50% death rate (LD50) is the dose that is associated with 𝜋 = 0.5 and hence logit(𝜋) = 0. This can be found by solving the following equation.
+0 =−14.084+(0.2366×𝐿𝐷50)
+Hence LD50 = 59.5 mg/l
+
+Question 6
+```{r}
+insect_dea2 <- glm(y~dose+I(dose^2), family=binomial(link = "logit"), data = insecticide)
+sumamry(insect_dea2)
+
+anova(insect_dea, insect_dea2)
+
+
+plot(insecticide$dose, insect_dea$fitted.values)
+plot(insecticide$dose, insect_dea2$fitted.values)
+```
+
+The p-value corresponding to the quadratic effect is 𝑝 = 0.243- there is no evidence of a quadratic effect of dose on the log odds of death.
+Note that neither the linear or quadratic terms are statistically significant in the above model. This does not mean that we have no evidence of an association (indeed we have already seen that there is strong evidence of a linear association). One of these terms (but not both) can be removed from the model without making the fit worse. In the interests of simplicity we would usually drop the quadratic term.
+We can plot the fitted probabilities from the two models using:
+
+
+```{r}
+#Plotting the fits for the two models
+dosePlotData <- data.frame(dose=insecticide$dose, 
+                           pihat1=insect_dea$fitted.values, 
+                           pihat2=insect_dea2$fitted.values)
+#now order by dose
+dosePlotData <- dosePlotData[order(dosePlotData$dose),]
+plot(dosePlotData$dose, dosePlotData$pihat1, xlab="Dose (mg/l)", ylab="Fitted probability of death")
+points(dosePlotData$dose, dosePlotData$pihat2,col="red")
+legend("topleft", legend = c("Linear dose model", "Quadratic dose model"),
+col= c("black", "red"), pch= c(1, 1), lty= c(0, 0), bty= "n")
+
+
+```
+We do not have evidence of a difference in models when we add a quadratic effect of dose
+p-value = 0.2315
+The plots confirm that the two models do not show significant differences.
+We see the fitted values are very similar, which is consistent with the quadratic term not affecting the fit much. Note that for each model the predicted probabilities asymptotically approach 1 as the dose increases (and asymptotically approach 0 as the dose decreases).
+
+
+Question 7
+```{r}
+dosefactor <- glm(y~factor(dose), family=binomial(link = "logit"), data = insecticide)
+summary(dosefactor)
+
+```
+The constant is-2.179. This is the log odds of death in the baseline category (Group 1)
+The coefficient for the second dose category is 0.893. This is the log odds ratio comparing the second dose level with the first. Hence the log odds of death in the second level is 2.179 + 0.893 = −1.285
+
+Interpretations for the other parameter estimates are analogous to this.
+First note that in this factor or categorical dose model the predicted probabilities are the same as the empirically observed probabilities in each dose group. This is because dose only takes eight distinct values, so a model with eight parameters will give predicted probabilities that exactly match the observed group-specific probabilities. So, the model is effectively estimating the eight dose group probabilities of death with no constraints on these. The model with dose as continuous also gives just eight predictions (one for each dose) for the data at hand, but now the predicted probabilities are constrained such that they follow a linear (on the logit scale) relationship with dose. Hence this “continuous” dose model is nested in the “categorical” dose model.
+Note that models where a predictor is treated as continuous are not nested in models where that predictor is categorised by grouping together similar (but not identical) levels of that predictor. For example, models where we i) consider age as continuous and ii) categorise age as “20-29”, “30-39” etc. are not nested
+
+
+Question 8
+```{r}
+anova(insect_dea, dosefactor)
+```
+We have no evidence that the “categorical” dose model fits the data better than the “continuous” dose model. Again, if you produce a plot of the fitted probabilities from the two models in question, the differences in fitted values are fairly small (code and output not shown, but similar to that used earlier can be used again)
+
+

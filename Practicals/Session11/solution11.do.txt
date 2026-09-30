@@ -1,0 +1,98 @@
+*SMoDO - shrinkage and variable selection - ridge and lasso regression - do file
+
+import delimited SAheart.csv, clear case(preserve)
+drop rownames
+encode famhist, gen(newfamhist)
+drop famhist
+rename newfamhist famhist
+
+*Question 1
+
+logit chd sbp tobacco ldl i.famhist obesity alcohol age
+estimates store logit
+
+*Question 2 - ridge regression
+*a)
+elasticnet logit chd sbp tobacco ldl i.famhist obesity alcohol age/*
+*/, alpha(0) rseed(723963)
+estimates store ridgecv
+*From the output the best lambda choice (selected lambda) is .0493792
+
+*b) 
+cvplot
+*This shows that as lambda decreases (note the reverse axis) the deviance decreases
+* up until the point indicated by the red line. This is where, according to cross-validation,
+*the deviance is minimized. The line to the right is not steep, suggesting the
+*penalisation is not improving model performance that much here.
+
+*c) 
+coefpath, xunits(lnlambda) legend(on)
+*As lambda increases, the coefficients are shrunk closer and closer to zero.
+*Looking at the legend, we see that there are two coefficients for family
+*history, even though it has only two levels. Normally if we include a binary
+*covariate we get an intercept corresponding to the reference/baseline levels
+*of the covariate + one coefficient for additional amount when you move to the
+*next level of the covariate. Stata is doing something different here...
+
+*If you want to add on the point where lambda is optimal:
+coefpath, xunits(lnlambda) rawcoefs legend(on) xline(.0493792)
+
+*d)
+lassocoef logit ridgecv
+lassocoef logit ridgecv, display(coef)
+*For family history for the logit model we see that Absent is the base (reference)
+*level. But for the ridge regression, we have a coefficient for both levels of 
+*family history, in line with the coefpath plot earlier. We see that the Present
+*coefficient is exactly minus the value of the Absent coefficient.
+
+*e)
+lassocoef logit, display(coef)
+lassocoef ridgecv, display(coef, penalized)
+*comparing the coefficients, we see that, as expected, the covariate effects
+*are shrunk towards zero by ridge regression.
+
+*f)
+*We re-run the ordinary logistic so we can get the fitted probabilities
+logit chd sbp tobacco ldl i.famhist obesity alcohol age
+predict logitpr, pr
+*And then re-run the ridge with same seed as before
+elasticnet logit chd sbp tobacco ldl i.famhist obesity alcohol age/*
+*/, alpha(0) rseed(723963)
+predict ridgepr, pr
+*And lastly summarise the two
+summ logitpr ridgepr
+*We see first that on average the two methods give identical probabilties on average.
+*Next, we see that the SD of the model probabilities are larger for the logit
+*model compared to the ridge logit - the effect of shrinkage on the coefficients
+*is to shrink individual model predicted probabilities towards the overall mean.
+*We also see the same in the min and max, which are somewhat less extreme for ridge.
+
+*Question 3 - lasso regression
+*a) 
+lasso logit chd sbp tobacco ldl i.famhist obesity alcohol age, rseed(723963)
+estimates store lassocv
+*The output shows that at the selected lambda value, 5 non-zero coefficients have been
+*retained out of the 8 original ones (7 covariates plus the extra one for family history).
+
+*b)
+coefpath, xunits(lnlambda) legend(on) xline(.0190284)
+*From the plot we can see alcohol is zero throughout, obesity goes to zero quickly, and
+*then SBP does too. These are in line with the p-values from the logistic, with these
+*three covariates having large p-values.
+
+*c)
+lassocoef ridgecv lassocv, display(coef, penalized)
+*This output confirms more clearly than the plot which covariates have been retained/dropped.
+*For the family history variable we see lasso has dropped the indicator variable corresponding to 
+*Present and retained the Absent indicator. So effectively the final model takes the reference
+*level as Present and includes an indicator covariate for Absent.
+
+*d)
+lasso logit chd sbp tobacco ldl i.famhist obesity alcohol age/*
+*/, selection(bic)
+estimates store lassobic
+lassocoef ridgecv lassocv lassobic, display(coef, penalized)
+*Lasso with CV using the deviance selected 0.019 for lambda.
+*Using the BIC we have a value of 0.0158, so a little smaller.
+*This means we should get less shrinkage in the coefficients, and
+*looking at the output from lassocoef this is indeed what we see.

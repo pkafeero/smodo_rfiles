@@ -1,0 +1,171 @@
+---
+title: "Session10"
+author: "Paddy Kafeero"
+date: "2026-01-27"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+source("C:/Users/PaddyK/Desktop/Random_r_Code/src/setup.R")
+
+```
+
+Question 1
+```{r}
+SAheart <- rio::import("C:/Users/PaddyK/Desktop/MSc Medical Statistics/Stat_Models_Discrete/Practicals/Session10/SAheart.csv")
+str(SAheart)
+View(SAheart)
+head(SAheart, 10)
+
+##Logistic model
+sa_mod1 <- glm(chd~sbp+tobacco+ldl+famhist+obesity+alcohol+age, family=binomial, data=SAheart)
+tidy(sa_mod1, conf.int = T)
+tidy(sa_mod1, conf.int = T, exponentiate = T)
+
+
+```
+What do the model results suggest about associations btwn these covariates and the CHD outcome? -- from here wew see that most show an association or 
+
+
+
+Question 2
+```{r}
+SAheart <- SAheart %>% mutate(pred=ifelse(sa_mod1$fitted.values>=0.5, 1, 0))
+
+
+##Accuracy of the model
+table(SAheart$pred)
+SAheart %>% tabyl(pred, chd) %>% adorn_totals("col")
+correctpos <- sum((SAheart$pred)[SAheart$pred==1 & SAheart$chd==1])
+
+mean(SAheart$chd==SAheart$pred)
+sa_acc <- (255+82)/(333+129)
+cat("The accuracy is %n", sa_acc*188 )
+
+```
+
+
+Question 3
+```{r}
+roc_obj <- roc(SAheart$chd, sa_mod1$fitted.values) ###itted values from the model
+coords <- coords(roc_obj, "all", ret = c("threshold", "sensitivity", "specificity"))
+head(coords)
+
+plot(roc_obj)
+###we get a model, we get predicted probability, then we say if the predicted prob is higher than the threshold, we shall predict the person is a case and if its below then not a case. Sensitivity we get preople predicted correctluy divided by cases. 
+
+
+#Now lets plot sensitivity against threshold and specifity against threshold to see how we can predict cases and non cases based on those plots
+plot(coords$threshold, coords$sensitivity, type = "l", col="red")
+lines(coords$threshold, coords$specificity, type = "l", col="blue")
+
+#The intersection o this plot is our best threshold.
+
+
+
+
+
+#The best threshold is the point at which we have our cutoff, and its the point closest to the top left of the roc plot: we can use the function below to get it.
+coords(roc_obj, "best", ret = c("threshold", "sensitivity", "specificity"), best.method = "youden")
+coords(roc_obj, "best", ret = c("threshold", "sensitivity", "specificity"), best.method = "closest.topleft")
+##The bbest threshold is 0.2856 (using YOUDEN's index) and 0.306835 (using top left value)
+```
+
+
+
+Question 4
+```{r}
+roc_obj
+
+#this gives us the area under the curve.
+##What do we conclude about our predictive ability then?
+
+```
+
+
+
+Question 5
+```{r}
+sa_hoslem <- hoslem.test(sa_mod1$y, fitted(sa_mod1), g=10) ##the $y is standard for this function
+sa_hoslem
+
+#The test gives us a p-value. The null for this test says: The model is correctly specified and everything is in order. If we get p-value is<0.05, we reject the null that the more
+cat("Our p-value", sa_hoslem$p.value, "indicates that we do not reject the null. Therefore the model is correctly specified oR No evidence of poor fit")
+
+
+
+
+cbind(sa_hoslem$observed, sa_hoslem$expected) ##this actually shows us the expected and observed values from the hoslem test.
+
+##this test doesnt tell us if we may have some bad fits at the extreme, so we do the calibration curvves below
+
+
+
+```
+
+
+Question 6
+```{r}
+##We produce a smooth calibration curve that comes in handy after doing the hoslem test
+
+library(CalibrationCurves)
+
+CalibrationCurves::val.prob.ci.2()
+?val.prob()
+
+
+val.prob(fitted(sa_mod1), sa_mod1$y)
+
+
+```
+
+
+Question 7
+```{r}
+set.seed(592723)
+n <- dim(SAheart)[1]
+train_idx <- sample(seq_len(n), size = 0.75 * n)
+trainData <- SAheart[train_idx, ]
+testData <- SAheart[-train_idx, ]
+
+##Using training dataset: has 75% of the people in the original dataset
+head(trainData)
+trainMod <- update(sa_mod1, data=trainData) ##gets the original model and fits the model to the train data. 
+roc(trainData$chd, trainMod$fitted.values) ##we estimate the AUC
+  
+  glm(chd~sbp+tobacco+ldl+famhist+obesity+alcohol+age, family=binomial, data=trainData)
+tidy(sa_mod1, conf.int = T, exponentiate = T)
+
+#now, we get AUC when applying fitted model to test data
+testData$fitted <- predict(trainMod, newdata = testData, type="response")
+
+
+###
+
+```
+
+
+Question 8
+```{r}
+
+###in a for loop, wo times select 9 times of the data in the training set
+set.seed(26012)
+split <- ceiling(runif(n,min=0,max=10))
+aucEsts <- array(0, dim=10)
+for (i in 1:10) {
+  trainData <- 
+    testData <- 
+    trainMod <- update(sa_mod1, data=trainData)
+  aucEsts[i] <- as.numeric(roc(testData$chd, predict(trainMod,
+                                                   newdata = testData,
+                                                   type="response"))$auc)
+}
+aucEsts
+mean(aucEsts)
+
+
+```
+
+
+

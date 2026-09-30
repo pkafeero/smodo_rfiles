@@ -1,0 +1,111 @@
+*SMoDO - non-linear effects and splines - do file
+
+import delimited SAheart.csv, clear case(preserve)
+drop rownames
+
+*Question 1- logistic model with just sbp entering linearly
+logit chd sbp
+*strong evidence of an effect - increasing SBP associated with
+*increased risk (log odds) of CHD
+est store linear
+
+*Question 2- plot fitted probabilities against SBP
+predict pr_lin, pr
+scatter pr_lin sbp
+
+// The plot shows the fitted probabilities increasing with increasing SBP, as we should expect given that the coefficient of `sbp` in the model is positive. However, we can see that the function is not exactly linear, even though we included `sbp` linearly in the model.
+//
+// This is because of the logit link function in logistic regression. This means that $P(CHD=1|sbp)=e^{\beta_0+\beta_1 sbp} / (1+e^{\beta_0+\beta_1 sbp})$, which is not a linear function of `sbp`. Indeed, remember that when the linear predictor gets very large and positive, the probability goes to 1, and when it is very large but negative, the probability goes to 0.
+
+// If we instead plot the fitted linear predictor value against `sbp`, we see an exact linear relationship, as we should:
+predict xb_lin, xb
+scatter xb_lin sbp
+
+*Question 3 - lowess smoother for SBP effect
+lowess chd sbp
+// The plot suggests the effect of SBP on the probability of CHD is not monotonic (increasing or decreasing), which is not compatible with our earlier model's assumption of a linear effect on the log odds.
+
+*Question 4  - logit of lowess estimate
+lowess chd sbp, logit
+// The plot looks fairly similar to the previous plot, even though the previous one plotted the probability against `sbp` whereas we are now plotting the log odds against `sbp`. They look similar because the log odds transformation is close to being linear when the probabilities are not too close to either 0 or 1.
+
+*Question 5 - quadratic model
+logit chd sbp c.sbp#c.sbp
+*or
+gen sbpsq = sbp^2
+logit chd sbp sbpsq
+est store quad
+*p-value for sbpsq is nowhere near significant
+*so no evidence against linearity (vs. quadratic alternative)
+predict xb_sbpsq, xb
+label var xb_sbpsq "Quadratic"
+twoway (scatter xb_sbpsq sbp) (lowess chd sbp, logit)
+*we see that the fitted quadratic model has not captured then
+*up turn in log odds on the left hand side that we see in the
+*lowess smoother. This is because of the global nature of the 
+*quadratic - the coefficient of SBP^2 controls the curvature
+*throughout the whole range.
+
+*Question 6 - restricted cubic spline model
+makespline rcs sbp, knots(5) replace
+logit chd _rs_rcs_1 _rcs*
+est store rcs_5
+predict xb_sbprcs, xb
+label var xb_sbprcs "Restricted cubic spline"
+twoway (scatter xb_sbpsq sbp) (lowess chd sbp, logit) /*
+*/ (scatter xb_sbprcs sbp)
+*The natural/restricted cubic spline fit does capture
+*the upturn on the left hand side. If I had to choose
+*between this model and the quadratic I would choose the
+*natural cubic spline - it is quite plausible that those
+*with very low blood pressure may have higher risk.
+
+*Question 7 - different values of knots
+*first we try with 4
+capture drop _rs* xb_sbprcs
+makespline rcs sbp, knots(4) replace
+logit chd _rs_rcs_1 _rcs*
+predict xb_sbprcs, xb
+label var xb_sbprcs "Restricted cubic spline"
+twoway (scatter xb_sbpsq sbp) (lowess chd sbp, logit) /*
+*/ (scatter xb_sbprcs sbp)
+
+*now with 6
+capture drop _rs* xb_sbprcs
+makespline rcs sbp, knots(6) replace
+logit chd _rs_rcs_1 _rcs*
+predict xb_sbprcs, xb
+label var xb_sbprcs "Restricted cubic spline"
+twoway (scatter xb_sbpsq sbp) (lowess chd sbp, logit) /*
+*/ (scatter xb_sbprcs sbp)
+
+*lastly with 10!
+capture drop _rs* xb_sbprcs
+makespline rcs sbp, knots(10) replace
+logit chd _rs_rcs_1 _rcs*
+predict xb_sbprcs, xb
+label var xb_sbprcs "Restricted cubic spline"
+twoway (scatter xb_sbpsq sbp) (lowess chd sbp, logit) /*
+*/ (scatter xb_sbprcs sbp)
+
+*as expected, fewer knots gives a smoother fit. As
+*the number of knots is increased the fit gets more wiggly.
+
+*Question 8 lrtest comparing quadratic with RCS
+lrtest rcs_5 quad
+// We are given a p-value of 0.44 - no evidence that the more complex restricted cubic spline model fits better. Remember though that hypothesis tests may fail to reject not because the null is true, but because the power of the test is low. Here in particular we have a moderately sized dataset with a binary outcome, so the power of this test is likely not that high.
+//
+// The likelihood ratio test is valid if the simpler model is nested within the more complex model. Here this is not the case. One way of seeing why is that the restricted cubic spline model assumes linearity before the first know and after the last know, whereas the quadratic model will be curved (not linear) throughout the entire range of `sbp` values.
+//
+// The AIC can still be used to compare the two models, albeit it does not give a p-value:
+estimates stats rcs_5 quad 
+// Models with smaller AIC values are preferred, so here we see the quadratic model is preferred (according to the AIC at least) to the restricted cubic spline model.
+
+*Question 9 - effect of bandwidth in lowess
+*the default is 0.8
+lowess chd sbp, logit bwidth(0.05)
+lowess chd sbp, logit bwidth(0.2)
+lowess chd sbp, logit bwidth(0.5)
+lowess chd sbp, logit bwidth(0.8)
+*based on these I would say our original lowess smoother, using
+*Stata's default bandwidth, still seems reasonable.

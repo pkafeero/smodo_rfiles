@@ -1,0 +1,205 @@
+---
+title: "Practical1"
+author: "Paddy Kafeero"
+date: "2026-01-12"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+source("C:/Users/PaddyK/Desktop/Random_r_Code/src/setup.R")
+```
+
+
+
+Question 1
+```{r}
+mental <- rio::import("C:/Users/PaddyK/Desktop/MSc Medical Statistics/Stat_Models_Discrete/Practicals/Session1/mental.dta")
+
+statar::sum_up(mental)
+mental %>% tabyl(treat)
+levels(mental$treat)
+mental$treat <- factor(mental$treat, levels = c(1,2,3), labels = c("Placebo","Morphine","Heroin"))
+
+##Distributions
+#Histograms for pre injection and post injection mental activity
+ggplot(mental, aes(x=prement)) + geom_histogram(bins = 8) + facet_wrap(~factor(treat))
+ggplot(mental, aes(x=mentact)) + geom_histogram(aes(bins = 8)) + facet_wrap(~factor(treat)) ##
+
+##Check whether there is association between the pre injection and post injection mental activity
+
+ggplot(data = mental, 
+       aes(x = prement, y = mentact, col = treat)) + 
+  geom_point(alpha = 0.3) + facet_wrap(~treat)
+
+##The numbers
+mental %>% group_by(treat) %>% skimr::skim(prement, mentact)
+
+```
+
+From the descriptive statistics we see:
+- Distribution of mental activity in the three groups does not differ greatly. This is as we would expect, since this is a clinical trial!
+- Post-injection however, there seem to be some differences but these are also not clear.
+- Histograms for both periods suggest non-normality in the mental activity variables. Note, however, that this does not necessarily invalidate inferences that we want to draw from the regression models that we are going to fit, since in a regression model it is only residuals that need to be normally distributed for valid inferences.
+- The scatter plots between pre and post injection mental activity show a positive association between the two. We can then say that for our regression, the conitnuous predictor is linearly associated with the outcome.
+
+
+
+
+```{r}
+glm(mentact~1, data = mental)
+
+
+```
+The data are discrete and non-negative, with potential skewness and zero-inflation, which violates strict normality assumptions. However, for large enough samples and illustrative purposes, linear models can be reasonable approximations, especially if treating scores as continuous. Alternatives like generalized linear models (e.g., Poisson for counts) might be more suitable if zero-inflation or overdispersion is severe, but the practical proceeds with normal errors.
+Basically our assumptions of linearity do not hold for the outcome variable.
+
+Question 2
+1. Overall mean: $\eta_i = \alpha$
+2. Drugs: $\eta_i = \alpha + \beta_1x_{1i}  + \beta_2x_{2i}$ where x1 is Morphine and x2 is heroin
+3. Pre-inj (Pre): $\eta_i = \alpha + \beta_3x_3 $ where x3 is the Pre-injection
+4. Drugs + Pre: $\eta_i = \alpha + \beta_1x_{1i}  + \beta_2x_{2i} + \beta_3x_3$
+5. Drugs + Pre + (Drugs-by-Pre interaction): $\eta_i = \alpha + \beta_1x_{1i}  + \beta_2x_{2i} + \beta_3x_3 + \beta_4x_{1i}x_3 + \beta_5x_{2i}x_3$
+
+In each model, it is assumed that $\eta_i = \mu_i$, and it is assumed that $Y_i \sim N(\mu_i, \sigma^2)$ and the observations are independent.
+
+Question 3
+```{r}
+mod1 <- lm(mentact~1, data=mental)
+anova(mod1)
+mod2 <- lm(mentact~treat, data=mental)
+mod3 <- lm(mentact~prement, data=mental)
+mod4 <- lm(mentact~treat+prement, data=mental)
+mod5 <- lm(mentact~treat*prement, data=mental)
+summary(mod5)
+
+```
+
+1. $ RSS = 1117.9; Residual df = 71$
+2. $ RSS = 980.62; Residual df = 69$
+3. $ RSS = 884.33; Residual df = 70$
+4. $ RSS = 752.06; Residual df = 68$
+5. $ RSS = 733.13; Residual df = 66$
+
+Question 4
+```{r}
+summary(mod5)
+
+##Displaying the fitted values for model 5 in a graph for each trial arm: We have to create a data frame of predicted values values based on our  model
+newdat <- expand.grid(
+  prement = seq(min(mental$prement, na.rm=T),
+                max(mental$prement, na.rm=T),
+                length.out = 100),
+  treat = levels(mental$treat) ##assumes treat variable as a factor
+)
+newdat$fitted <- predict(mod5, newdata = newdat)
+#We then plot the  predicted values on a graph
+
+ggplot(newdat, aes(x = prement, y = fitted, colour = treat)) + geom_line(linewidth = 1) + labs(x = "Pre-injection score", y = "Fitted mean post-injection score", colour = "Treatment") + theme_minimal()
+
+```
+
+Model 5 -- Drugs + Pre + (Drugs-by-Pre interaction): $\alpha + \beta_1x_{1i}  + \beta_2x_{2i} + \beta_3x_3 + \beta_4x_{1i}x_3 + \beta_5x_{2i}x_3$
+1. Placebo: Intercept = $\alpha = 1.97803$; Slope $\beta_3=0.59394$
+2. Morphine: Intercept = $\alpha + \beta_1 = 1.97803-1.21174=0.76629$; Slope $\beta_3 + \beta_4=0.59394-0.08953=0.50441$
+3. Heroin: Intercept = $\alpha + \beta_2=1.97803-1.46197=0.51606$; Slope $\beta_3 + \beta_5=0.59394-0.31299=0.28095$
+
+Question 5
+We can do the calculations compare the fits of the models by using the Residual Sums of Squares and the degrees of freedom.
+What we are doing is the partial F test
+
+
+```{r}
+#Model 3 vs Model 4: We are doing the partial F test to see if the new model performs better than the smaller one? Whether addition of a variable changes anything
+#F-observed=((RSS_smallmod - RSS_bigmod)/(df_smallmod-dfbigmod))/(RSS_bigmod/df_bigmod) -- here we get the the F statististic that we compare with the tables F((df_small-df_big),df_big) with a value q of 0.975 to get the 5% significance for a 2-tailed test: To get the p-value here in R, we feed the F statistic into the pf() function comparing with the F_tables degrees of freedom used.
+F_stat <- ((884.33-752.06)/(70-68))/(752.06/68) ##F_observed is 5.979815. Comparing with the tables Fobser>F_tables, so we say we have evidence to reject the null saying we have evidence of a difference in post iinj scores betweeen groups conditonal on (holding constant) pre-injection scores. Basically the new model with drugs is actually beneficial in that there is a effect of drugs!
+pval <- pf(F_stat, df1=(70-68), df2=68, lower.tail = F) ## P-value is 0.004; Lower tail = false is telling us we are getting the P(X>x). The right of the critical value!
+
+
+#Comparison with the 𝐹2,68 distribution (pf(5.98,2,68,lower.tail=FALSE)) gives 𝑝 = 0.004 (0.001 < 𝑝 < 0.005 if using statistical tables). There is therefore strong evidence of a difference in the post-injection scores between the groups conditional on (holding constant) pre-injection scores.
+#In R we can do this using:
+anova(mod3, mod4)
+
+#Comparison with the 𝐹2,66 distribution (pf(0.85,2,66,lower.tail=F))gives 𝑝 = 0.43 (𝑝 >0.1 from statistical tables). There is therefore no evidence of an interaction between group and pre-injection score.  In R:
+
+##For model4 and model 5: we want to see if there is interaction effect.
+anova(mod4, mod5) #p-value=0.4312 and F =0.852 indicating There is therefore no evidence of an interaction between group and pre-injection score
+
+```
+
+
+Question 6
+Unadjusted: Morphine; Mean diff=`-1.8750`; SE=`1.0883` | Heroin; Mean diff=`-3.375`; SE=`1.0883`
+Adjusted: Morphine; Mean diff=`-1.76151`; SE=`0.96034` | Heroin; Mean diff=`-3.31825`; SE=`0.96010`
+
+Question 7
+The model 2 F test indicates moderately strong evidence that the groups differ in respect of their post-injection scores. p-values show that diff btn morphine and placeboo is not significant at 5%, while diff betwen hroin an dplcebo is.
+Adjusting for prement changes the group difference but not too much. Since it is a randomised trial, this shows there is no confounding really. There are only  very small chance differences between group means at baseline. Adjusting foor these give more precise estimates (indicated by reduced SEs)
+
+For model 4, estimated mean mental activity score on heroin is 3.3 lower than that in placebo, conditional on baseline scores which is highly significant. the estimated mean score in the morphine arm is 1.76 lower than in placebo, conditional on baseline score. There is weak evidence for the conditional mean outcome differing the morphine arm compared to the placebo arm.
+The F-test for the interaction parameters in the last model gives 𝑝 = 0.43, indicating no evidence against the null hypothesis that the effects of the drugs are the same irrespective of pre-injection mental activity. So, we cannot say that there is evidence that the effects of the drugs are different for individuals with different levels of pre-injection mental activity
+
+- F test of the model for drugs? Does it indicate difference in groups?
+- What do the p-values in the model for drugs say?
+- Adjusting for prementa? what does this do? But its a trial, so do they change alot?
+- What does the interaction model say? Does comparing the models using the partial F test indicate presence of interaction effects?
+- With looking at all those, can we say there are effects?
+
+
+
+The F-test from model 2 (obtained using anova(mod2)) gives 𝑝 = 0.0109, indicating moderately strong evidence that the groups differ in respect of their post-injection scores. Looking at the p-values corresponding to the individual coefficients, we see that the estimated difference between morphine and placebo is not formally statistically significant at the 5% level, but is close (𝑝 = 0.089), whilst the estimated difference between heroin and placebo is statistically significant (𝑝 = 0.003).
+
+Adjusting for ‘prement’ changes the estimated group differences somewhat, but not dramatically. This is as we would expect. Since the trial is randomized there is no confounding. There are only small chance differences between the group means at baseline. Adjusting for these changes the estimated treatment effects slightly, but not materially. The primary purpose of baseline adjustment in randomised trials is to improve the efficiency of treatment effect estimates, this being reflected in (here only slightly) reduced standard errors.
+
+Thus focusing on the effect estimates form model 4, we have that the estimated mean mental activity score in the heroin arm is 3.32 (95% CI 1.40 to 5.23, p=0.001) lower than the placebo arm, conditional on (pre)baseline score, which is highly statistically significant. The estimated mean mental activity score in the morphine arm is 1.76 (95% CI-0.15 to 3.68, p=0.07) lower than the placebo arm, conditional on (pre)baseline score. There is only weak evidence for the (conditional) mean outcome differing the morphine arm compared to the placebo arm.
+
+The F-test for the interaction parameters in the last model gives 𝑝 = 0.43, indicating no evidence against the null hypothesis that the effects of the drugs are the same irrespective of pre-injection mental activity. So, we cannot say that there is evidence that the effects of the drugs are different for individuals with different levels of pre-injection mental activity.
+
+
+
+Question 8
+For the mean differences, we get the coefficients and subtract them
+```{r}
+coef(mod2)
+coef(mod4)
+est <- as.numeric(coef(mod4)[3]- coef(mod4)[2])
+
+```
+
+For the Standard errors to be used in the CI, we pick the diagonal values for Heroin and Morpinne in the variance covariance matrix, then we get the variance of the mean difference using 𝑉𝑎𝑟(𝐴 − 𝐵) = 𝑉𝑎𝑟(𝐴) +𝑉𝑎𝑟(𝐵)−2×𝐶𝑜𝑣(𝐴,𝐵)
+```{r}
+vcov(mod4) #display the Variance covariance matric to get the diagonal values for morphine and heroine
+
+#variance of 3rd coef- 2nd coef is
+var_diff <- vcov(mod4)[3,3] + vcov(mod4)[2,2]- 2*vcov(mod4)[2,3]
+
+#getting the standard error, we squareroot that variance
+se <- sqrt(var_diff)
+
+#For the confidence interval, we are meant to use the t-statistic!!!! for 95% CI using the qt(function)
+L <- est- qt(0.975,df=68)*se
+U <- est + qt(0.975,df=68)*se
+
+CI <- c(L,U)
+CI
+```
+Doing this calculation manually is a very good way of understanding the statistical calculations
+required. But in practice we may prefer not to do the calculations manually. One way to
+achieve the same result is to use the comparisons function of the marginaleffects package:
+
+We have done in manually up.
+But, We could as well use the function COMPARISONS in the marginaleffects package. It outputs the details based on what you ask it to specify!
+```{r}
+library(marginaleffects)
+comparisons(
+mod4,
+newdata = "mean",
+variables = list(treat = c("Morphine", "Heroin")), ##2 is Morphine and 3 is Heroine
+df="residual"
+)
+```
+
+Note that here we are asking comparisons to compare mean outcomes at the specified levels of treatment, with the other covariates held at their means. This reduces to the same contrast of coefficients as we are interested in. But it would not if we instead were applying it to model 5 (with interaction), since in this model the difference in means between treatment groups differs according to the pre-treatment value.
+
+
+

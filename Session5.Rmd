@@ -1,0 +1,179 @@
+---
+title: "Session5"
+author: "Paddy Kafeero"
+date: "2026-01-19"
+output: html_document
+---
+
+
+```{r}
+source("C:/Users/PaddyK/Desktop/Random_r_Code/src/setup.R")
+```
+
+
+
+Question 1
+
+
+Question 2
+
+
+
+Question 3
+No, because the odds ratios are non-collapsible. 
+
+RD1: 0.04; for large stones there is 4% hgher chance of failur among those with X=1 compared to X=0
+For a ptient with large stones, the conditional effect is most relevant. The marginal treatment effect estimate is of more relevance when it comes to a policy maker.
+
+PART B: A simulated example with binary outcome
+
+Question 4
+```{r}
+sim_binary <- rio::import("C:/Users/PaddyK/Desktop/MSc Medical Statistics/Stat_Models_Discrete/Practicals/Session5/simdata_binary.dta")
+View(sim_binary)
+
+
+sim_binary %>% tabyl(x, z) %>% adorn_percentages("row") %>% adorn_ns()
+
+
+```
+Quantify the relationship. How is the spread.
+
+Question 5
+```{r}
+sim_mod1 <- glm(y~x*z, family = binomial(link="logit"), data = sim_binary)
+summary(sim_mod1)
+
+##Getting the conditional probabilities
+new <- expand.grid(x = c(0, 1), z = c(0, 1))
+# Get predicted probabilities (type = "response" gives Pr(Y=1))
+new$prob <- predict(sim_mod1, newdata = new, type = "response")
+View(new)
+
+# we can use plogis to get the probabilities. Check the practicals!
+
+
+#ii: Conditional Risk Differences
+#for For Z=0
+RD_z0 <- new$prob[new$x==1 & new$z==0] - new$prob[new$x==0 & nd$z==0]
+RD_z1 <- new$prob[new$x==1 & new$z==1] - new$prob[new$x==0 & nd$z==1]
+
+
+comparisons(sim_mod1,variables=c("x"), by="z")
+
+```
+
+Question 6
+The same! Why? because there is really no relationship between x and z (indicating no effect modification by Z on effect of X on Y) and the risk factors are collapsible.
+
+
+Question 7
+```{r}
+
+#For Z = 0
+exp(sim_mod1$coefficients[2])
+
+#For Z = 1
+exp(sim_mod1$coefficients[2] + sim_mod1$coefficients[4])
+
+##OR
+comparisons(sim_mod1,variables=c("x"), 
+            by="z",transform="exp", 
+            type="link")
+
+```
+The conditional odds ratios are the same
+
+
+Question 8
+```{r}
+sim_mod2 <- glm(y~x, family = binomial(link="logit"), data = sim_binary)
+summary(sim_mod2)
+
+exp(sim_mod2$coefficients)
+
+```
+Assumptions: Z does not modify the effect of X on Y.
+The Marginal odds ratios are non collapsible given the fact that they are the same for the conditionals and yet the marginal is different. The difference in the OR is not due to the confounding but due to non-collapsibility.
+
+
+PART C: A simulated example with binary outcome and continuous confounder
+
+```{r}
+sim_binary2 <- rio::import("C:/Users/PaddyK/Desktop/MSc Medical Statistics/Stat_Models_Discrete/Practicals/Session5/simdata_binary2.dta")
+View(sim_binary2)
+
+```
+
+Question 9
+```{r}
+sim_mod3 <- glm(y~x*z, family = binomial(link="logit"), data = sim_binary2)
+summary(sim_mod3)
+skim(sim_binary2$z)
+
+#Find the qunatiles of z using
+quants <- quantile(sim_binary2$z, probs = c(0.1, 0.5, 0.9))
+quants
+
+exp(coef(sim_mod3)[2]+20.03243*coef(sim_mod3)[4])
+#The condtional odds for person with z=median = 27.56
+
+
+
+#using marginaleffects package
+comparisons(sim_mod3, variables=c("x"),
+            newdata=datagrid(z=quants),
+            transform="exp",
+            type="link")
+
+```
+
+
+Question 10
+Using the empirical standardization method in session4
+```{r}
+#calculate fitted probabilites under x=0, and average
+prx0 <- mean(plogis(coef(sim_mod3)[1] +
+coef(sim_mod3)[3]*simdata_binary2$z))
+#and under x=1
+prx1 <- mean(plogis(coef(sim_mod3)[1] + coef(sim_mod3)[2]+
+coef(sim_mod3)[3]*simdata_binary2$z+
+coef(sim_mod3)[4]*simdata_binary2$z))
+
+#The required marginal odds ratio can then e got by
+prx1/(1-prx1) / (prx0/(1-prx0))
+
+
+#OR
+#Using the marginal effects method of avg_comparisons
+avg_comparisons(sim_mod3,
+                variables="x",
+                comparison="lnor", ###
+                transform = "exp")
+
+```
+
+
+
+Question 11
+```{r}
+noAdj <- glm(y~x,data=sim_binary2, family=binomial)
+
+exp(coef(noAdj)[2])
+
+
+```
+
+The crude marginal OR estimate from the regression of 𝑌 on 𝑋 alone is 1.09. This differs from the estimate in question 10 (0.87) because the estimate in question 10 is adjusted for 𝑍- i.e. we used standardization to adjust for 𝑍 and estimate the marginal probabilities Pr(𝑌 = 1|𝑑𝑜(𝑋 = 𝑥)). The crude marginal OR estimate is a biased estimate of the causal marginal OR because it does not control for confounding by 𝑍
+
+
+
+
+Question 12
+
+The (causal) marginal OR is 0.87. The interpretation is that if everyone in this population were to receive the treatment (𝑋 = 1) the estimated odds of 𝑌 = 1 would be 13% lower than had everyone not received the treatment (𝑋 = 0).
+The conditional OR for an individual with 𝑍 at the median value in the population (𝑍 = 27.57) is estimated to be 0.93. This means that if a person with this value of 𝑍 received the treatment their estimated odds of 𝑌 = 1 would be 7% lower than had they not received the treatment.
+The conditional OR for an individual with 𝑍 at the 10th percentile value in the population (𝑍 =20.03) is estimated to be 1.49. This means that if a person with this value of 𝑍 received the treatment their estimated odds of 𝑌 = 1 would be 49% higher than had they not received the treatment.
+The conditional OR for an individual with 𝑍 at the 90th percentile value in the population (𝑍 =35.11) is estimated to be 0.58. This means that if a person with this value of 𝑍 received the treatment their estimated odds of 𝑌 = 1 would be 42% lower than had they not received the treatment
+
+

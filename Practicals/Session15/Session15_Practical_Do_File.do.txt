@@ -1,0 +1,157 @@
+/*
+
+Model solutions for SMoDO Practical: Multinomial and ordinal logistic regression
+
+*/
+
+** Set directory - change this to your own folder
+	
+** Load data
+	import delimited multinomial.csv, clear
+
+** Examine dataset
+	describe
+	codebook
+
+********************************************************************************
+********************************************************************************
+*** Question 1
+
+	encode sex, gen(newsex)
+	drop sex
+	rename newsex sex
+
+	egen sbpcat = cut(sbp) , at(0 120 140 160 300) icodes
+	replace sbpcat = sbpcat + 1
+		label var sbpcat "SBP"
+		label define lab_sbpcat 1 Normal 2 Prehypertension 3 "High (stage 1)" ///
+				4 "High (stage 2)" , replace
+		label values sbpcat lab_sbpcat
+
+** Check that this has worked properly
+	tab sbpcat
+	bysort sbpcat : sum sbp
+	
+** Make a new variable for age centred at 50
+	gen cen_age = ageyrs - 50
+		label var cen_age "Age centred at 50"
+
+********************************************************************************
+********************************************************************************
+*** Question 2
+
+* Multinomial logistic regression model
+	mlogit sbpcat i.sex cen_age
+
+			
+********************************************************************************
+********************************************************************************
+*** Question 3 
+	
+** Predicted probability that sbpcat = 3 for a female aged 70
+di exp(-1.540525+20*.0786693)/(1+exp(-1.540525+20*.0786693)+exp(-.3877347+20*.0422103)+exp(-2.313477+20*.1067755))		
+
+********************************************************************************
+********************************************************************************
+*** Question 4
+		
+** We need four new variable names, one for each category of sbpcat
+	predict pr1 pr2 pr3 pr4
+
+** Plot probabilities vs (actual) age
+    sort ageyrs
+	
+	line pr1 pr2 pr3 pr4 ageyrs if sex==1, title("Feales") legend(order( 1 "Normal SBP" 2 "Prehypertension" 3   "Stage 1" 4 "Stage 2") cols(1) colfirst) sort saving(g1, replace)
+	
+	line pr1 pr2 pr3 pr4 ageyrs if sex==2, title("Males") legend(order( 1 "Normal SBP" 2 "Prehypertension" 3   "Stage 1" 4 "Stage 2") cols(1) colfirst) sort saving(g2, replace)
+	
+	graph combine "g1" "g2", title("Multinomial logistic regression model") subtitle("Predicted probabilities by sex and age") 
+	
+	graph export "Q1.png" , replace width(1000)
+  
+    * Checking prediction in question 3 
+	summ pr3 if cen_age==20 & sex==1
+	
+	* Note that we can also obtain predictions (with 95% CI) using the margins command
+	mlogit sbpcat i.sex cen_age
+	margins, at(cen_age=20 sex=1) predict(outcome(3))
+********************************************************************************
+********************************************************************************
+*** Question 5
+
+* Ordinal logistic regression model
+	ologit sbpcat i.sex cen_age
+		
+
+********************************************************************************
+********************************************************************************
+*** Question 6
+
+** Predicted probability that sbpcat >= 3 for a female aged 70
+	dis exp(-1.87444 + 20*.0574355) / ( 1 + exp(-1.87444 + 20*.0574355))
+
+** Predicted probability that sbpcat = 4 for a female aged 70
+	dis exp(-3.24833 + 20*.0574355) / ( 1 + exp(-3.24833 + 20*.0574355))
+
+** Predicted probability that sbpcat = 3 for a female aged 70
+** To obtain the required probability we have to look at the difference between 
+** the two probabilities calculated above 	
+	dis exp(-1.87444 + 20*.0574355) / ( 1 + exp(-1.87444 + 20*.0574355)) - exp(-3.24833 + 20*.0574355) / ( 1 + exp(-3.24833 + 20*.0574355))
+
+********************************************************************************
+********************************************************************************
+*** Question 7
+		
+** We need four new variable names, one for each category of sbpcat
+	predict pr5 pr6 pr7 pr8
+
+** Plot probabilities vs (actual) age
+    sort ageyrs
+	
+	line pr5 pr6 pr7 pr8 ageyrs if sex==1, title("Females") legend(order( 1 "Normal SBP" 2 "Prehypertension" 3   "Stage 1" 4 "Stage 2") cols(1) colfirst) sort saving(g3, replace)
+	
+	line pr5 pr6 pr7 pr8 ageyrs if sex==2, title("Males") legend(order( 1 "Normal SBP" 2 "Prehypertension" 3   "Stage 1" 4 "Stage 2") cols(1) colfirst) sort saving(g4, replace)
+	
+	graph combine "g3" "g4", title("Ordinal logistic regression model") subtitle("Predicted probabilities by sex and age") 
+	
+	graph export "Q2.png" , replace width(1000)
+
+    graph combine "g1" "g2" "g3" "g4", title("Predicted probabilities by sex and age") subtitle(Multinomial (top panel) and ordinal (bottom) logistic regression models)
+ 
+	graph export "Q3.png" , replace width(1000)
+
+	
+    * Checking prediction in question 6 
+	summ pr7 if cen_age==20 & sex==1
+
+	* Note that we can also obtain predictions (with 95% CI) using the margins command
+	ologit sbpcat i.sex cen_age
+	margins, at(cen_age=20 sex=1) predict(outcome(3))
+	
+********************************************************************************
+********************************************************************************
+*** Question 8
+
+	qui mlogit sbpcat i.sex cen_age
+	estat ic
+	
+	qui ologit sbpcat i.sex cen_age
+	estat ic
+
+********************************************************************************
+********************************************************************************
+*** Question 9
+
+	ologit sbpcat i.sex cen_age, nolog
+	
+*Create new binary outcomes
+	gen sbpcat1=(sbpcat>=2)
+	gen sbpcat2=(sbpcat>=3)
+	gen sbpcat3=(sbpcat>=4)
+		
+	logit sbpcat1 i.sex cen_age, nolog
+	logit sbpcat2 i.sex cen_age, nolog
+	logit sbpcat3 i.sex cen_age, nolog
+
+********************************************************************************
+********************************************************************************

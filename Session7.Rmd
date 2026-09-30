@@ -1,0 +1,143 @@
+---
+title: "Session7"
+author: "Paddy Kafeero"
+date: "2026-01-20"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+source("C:/Users/PaddyK/Desktop/Random_r_Code/src/setup.R")
+
+```
+
+Aims
+We will examine the association between oesophageal cancer as the outcome and a dichotomous smoking status variable (smoker or non-smoker) as an exposure, and attempt to answer the following questions:
+1. Does smoking increase the risk of oesophageal cancer?
+2. Does alcohol intake or age confound this relationship?
+3. What is the best way to adjust for these potential confounders: as categorical or continuous variables?
+We will also swap the exposure and outcome variables to explore what happens to the estimate of the odds ratio (and its confidence interval)
+
+
+
+Analysis
+Question 1
+
+```{r}
+oeso1 <- rio::import("C:/Users/PaddyK/Desktop/MSc Medical Statistics/Stat_Models_Discrete/Practicals/Session7/oeso1.csv")
+str(oeso1)
+
+oeso1$tobacco_2 <- ifelse(oeso1$tobacco_group==0, 0, 1)
+##Associations between binary tobacco status and alcohol group
+oeso1 %>% tabyl(tobacco_2, alcohol_grp) ###check using a heat map!!!!
+mod1 <- glm(tobacco_2~factor(alcohol_grp), family=binomial, data = oeso1)
+tidy(mod1, exponentiate = T, conf.int = T)
+##Associations between binary tobacco status and age
+oeso1 %>% tabyl(tobacco_2, age_group)
+mod2 <- glm(tobacco_2~age_group, family=binomial, data = oeso1)
+tidy(mod2, exponentiate = T, conf.int = T)
+##Associations between alcohol and age
+oeso1 %>% tabyl(alcohol_grp, age_group)
+oeso1$alcohol_grp<-factor(oeso1$alcohol_grp)
+oeso1$age_group<-factor(oeso1$age_group)
+mod3 <- glm(alcohol_grp~age_group, family="binomial", data = oeso1)
+tidy(mod3, exponentiate = T, conf.int = T)
+
+```
+
+
+Question 2
+```{r}
+#a
+tob_case_tb<-oeso1 %>% tabyl(case, tobacco_2) %>% adorn_percentages() %>% adorn_ns()
+View(tob_case_tb)
+
+#ODD ratio
+(or_cc<-(255*191)/(9*521))
+
+var<-(1/255)+(1/191)+(1/521)+(1/9)
+
+Ci_L<-or_cc - (1.96*sqrt(var))
+Ci_U<-or_cc + (1.96*sqrt(var))
+
+CI <- c(Ci_L, Ci_U)
+cat("The estimate is", or_cc, "with CI: ", Ci_L, "to", Ci_U)
+
+#b
+
+
+```
+
+
+Question 3
+```{r}
+#a
+mod4<-glm(case~tobacco_2, family = binomial, data=oeso1)
+tidy(mod4, exponentiate = T, conf.int = T)
+
+#b
+mod5<-glm(tobacco_2~case, family = binomial, data=oeso1)
+tidy(mod5, exponentiate = T, conf.int = T)
+```
+For the case control study we see that the odds ratios are the same regardless of the order of the main exposure and the outcome.
+
+
+Question 4
+```{r}
+#a
+mantelhaen.test(x=oeso1$tobacco_2, y=oeso1$case, z = oeso1$alcohol_grp)
+
+##OR: cREATE A TABLE AND CALCULATE MANUALLY
+oeso1$cases<-factor(oeso1$cases)
+tab <- xtabs(~ oeso1$case + oeso1$tobacco_2 + oeso1$alcohol_grp, data = oeso1)
+num<-(((148*29)/(237+29+148))+((80*72)/(201+72+80+3))+((22*46)/(66+46+22+5))+((5*44)/(17+44+5+1)))
+denom<-(((0*237)/(237+29+148))+((3*201)/(201+72+80+3))+((5*66)/(66+46+22+5))+((1*17)/(17+44+5+1)))
+or_mh<-num/denom
+
+#b
+mantelhaen.test(x=oeso1$tobacco_2, y=oeso1$case, z = oeso1$alcohol_grp)
+
+```
+
+Question 5
+```{r}
+#a
+mod6 <- glm(case~tobacco_2+alcohol_grp, family=binomial, data=oeso1)
+tidy(mod6, exponentiate = T, conf.int = T)
+
+#b
+mod7 <- glm(tobacco_2~case+alcohol_grp, family=binomial, data=oeso1)
+tidy(mod7, exponentiate = T, conf.int = T)
+
+```
+Value slightly different because in the glm its the mle we get while in the mh we dont get the mle. But they are both valid estimates.
+
+Question 6
+```{r}
+mod8 <- glm(case~tobacco_2+alcohol_grp+age_group, family=binomial, data=oeso1)
+tidy(mod8, exponentiate = T, conf.int = T)
+
+
+```
+
+
+Question 7
+```{r}
+
+```
+
+
+
+Question 8
+```{r}
+
+```
+
+
+
+
+
+
+
+
+

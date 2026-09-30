@@ -1,0 +1,231 @@
+---
+title: "Session4"
+author: "Paddy Kafeero"
+date: "2026-01-19"
+output: html_document
+---
+
+The aims of this session are:
+• To estimate conditional treatment effects for both binary and continuous outcomes.
+• To estimate marginal treatment effects for both binary and continuous outcomes using
+standardization.
+• To interpret estimates of marginal and conditional treatment effects.
+
+
+```{r}
+source("C:/Users/PaddyK/Desktop/Random_r_Code/src/setup.R")
+```
+
+
+Import the kidney_example data
+```{r}
+kidney <- rio::import("C:/Users/PaddyK/Desktop/MSc Medical Statistics/Stat_Models_Discrete/Practicals/Session4/kidney_example.csv")
+
+names(kidney)
+str(kidney)
+anyNA(kidney)
+```
+
+PART A: Binary Outcome
+Explore the tables
+```{r}
+tabyl(kidney, y, x)
+
+kidney %>% dplyr::group_by(factor(z)) %>% tabyl(y, x)
+```
+
+Question 1
+```{r}
+#i
+log_y <- glm(y~factor(x)+factor(z), family = binomial(link="logit"), data=kidney)
+summary(log_y)
+
+#ii
+#kidney$x <- factor(kidney$x)
+#kidney$z <- factor(kidney$z)
+log_xz <- glm(y~x+z+I(x*z), family = binomial(link="logit"), data=kidney)
+
+summary(log_xz)
+
+```
+Question 2
+```{r}
+#i
+kidney$fit <- fitted.values(log_xz)
+View(kidney)
+
+
+# Create a small grid of the scenarios we want to predict
+nd <- expand.grid(x = c(0, 1), z = c(0, 1))
+
+# Get predicted probabilities (type = "response" gives Pr(Y=1))
+nd$prob <- predict(log_xz, newdata = nd, type = "response")
+print(nd)
+View(nd)
+
+
+#ii: Conditional Risk Differences
+#for For Z=0
+RD_z0 <- nd$prob[nd$x==1 & nd$z==0] - nd$prob[nd$x==0 & nd$z==0]
+RD_z1 <- nd$prob[nd$x==1 & nd$z==1] - nd$prob[nd$x==0 & nd$z==1]
+#iii: Conditional risk ratio
+RR_z0 <- nd$prob[nd$x==1 & nd$z==0] / nd$prob[nd$x==0 & nd$z==0]
+RR_z1 <- nd$prob[nd$x==1 & nd$z==1] / nd$prob[nd$x==0 & nd$z==1]
+
+```
+
+Question 3
+```{r}
+
+
+
+
+```
+
+
+Question 4
+```{r}
+
+#4i
+avg_predictions(log_xz, variables = "x")
+#Pr(Y=1|do(X=0))=0.169
+#Pr(Y=1|do(X=1))=0.223
+
+#4ii
+avg_comparisons(log_xz, variables = "x")
+
+```
+
+
+
+
+
+
+
+Question 5
+```{r}
+pred_covs <- subset(kidney,select=c(x,z))
+#set treatment to 0
+pred_covs$x <- 0
+#manually calculate predicted probabilities for each individual
+#use plogis(x)=exp(x)/(1+exp(x))
+pred_covs$pred0 = with(pred_covs,
+plogis(-2.60269+0.7308873*x+1.607874*z-0.5245292*x*z))
+#now set treatment to 1
+pred_covs$x <- 1
+pred_covs$pred1 = with(pred_covs,
+plogis(-2.60269+0.7308873*x+1.607874*z-0.5245292*x*z))
+#calculate the mean predicted outcome in each scenario; ##We get prob y when x=0 and prob y when x=1, then we average them and we see we get the same as above in the avr!!
+
+mean(pred_covs$pred0)
+mean(pred_covs$pred1)
+#risk difference is
+mean(pred_covs$pred1)-mean(pred_covs$pred0)
+
+
+
+##We get prob y when x=0 and prob y when x=1
+
+##How do we get the confidence interval for this?
+library(boot)
+quantile(boot_fit$t[,2], c(.025, .975))
+boot::boot.ci(boot_fit, type = 'norm', index = 2)
+
+
+```
+
+
+
+PART B: CONTINUOUS OUTCOME
+
+
+```{r}
+kidney_cont <- rio::import("C:/Users/PaddyK/Desktop/MSc Medical Statistics/Stat_Models_Discrete/Practicals/Session4/kidney_example_continuousY.csv")
+
+names(kidney_cont)
+str(kidney_cont)
+View(kidney_cont)
+```
+
+
+
+Question 6
+```{r}
+
+kidney_cont %>% 
+  group_by(x) %>% 
+  summarise(mean_y=mean(y))
+
+kidney_cont %>% 
+  group_by(z) %>% 
+  summarise(mean_y=mean(y))
+
+kidney_cont %>% skimr::skim(factor(kidney_cont$x), factor(kidney_cont$y))
+
+
+
+```
+
+Question 7
+```{r}
+kidney_cont$x <- factor(kidney_cont$x)
+kidney_cont$z <- factor(kidney_cont$z)
+
+
+lin_xz <- lm(y~x+z+(x*z), data=kidney_cont)
+summary(lin_xz)
+
+broom::tidy(lin_xz)
+```
+
+
+Question 8
+```{r}
+
+```
+
+Question 9
+```{r}
+
+```
+
+
+Question 10
+```{r}
+
+```
+
+
+Question 11
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

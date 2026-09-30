@@ -1,0 +1,192 @@
+---
+title: "Session14"
+author: "Paddy Kafeero"
+date: "2026-02-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#source("C:/Users/PaddyK/Desktop/Random_r_Code/src/setup.R")
+
+```
+
+Aims
+The aim of this session is to address the following questions about these data:
+1. Is there a difference between deaths rates in the two factories?
+2. Is death rate associated with age?
+3. What is the best way to model age (categorical or continuous)?
+
+```{r}
+rubber <- rio::import("C:/Users/PaddyK/Desktop/MSc Medical Statistics/Stat_Models_Discrete/Practicals/Session14/rubber.csv")
+View(rubber)
+```
+
+
+Question 1
+```{r}
+#Total number of deaths
+tdeaths <- sum(rubber$deaths)
+
+#Total number of person years
+tpyrs <- sum(rubber$pyrs)
+
+#Overall death rate
+(drate <- tdeaths/tpyrs)
+cat("Overall rate of death is", round(drate*1000, 2),"deaths per 1000 person-years")
+
+#Log death rate
+(ldrate <- log(drate))
+cat("Log death rate is", ldrate)
+
+```
+
+
+Question 2
+```{r}
+##Death rate in each factory
+sumtab <- rubber %>% group_by(factory) %>% summarise(tdeaths=sum(deaths), tpyrs=sum(pyrs), deathrate=sum(deaths)/sum(pyrs))
+
+f1drate <- 0.007366483
+f2drate <- 0.009194442
+
+lf1drate <- log(f1drate)
+lf2drate <- log(f2drate)
+
+
+```
+
+
+Question 3
+```{r}
+##Death rate variable per row
+library(dplyr)
+rubber <- rubber %>% group_by(factory) %>% mutate(log_death_rate = log(deaths/pyrs) )
+head(rubber)
+
+##Plot log death rates against age group
+library(ggplot2)
+rubber %>% ggplot(aes(agegrp, log_death_rate)) +
+  geom_point(size = 3) +
+  geom_text(aes(label = factory), position = position_nudge(x = 0.1)) +
+  labs(x = "Age group", y = "Log death rate")
+
+```
+This plot suggests that death rate decreases with increasing age group. It also suggests that factory 1 has higher death rate than factory 2.
+
+Question 4
+
+Its a Poisson distribution.
+
+$log(deathrate_{f0, Ag50-59})=log(pyrs) + \beta_{0}+\beta_{1}factory_i+\beta_{2}Age_{60-69}+\beta_{3}Age_{70-79}+\beta_{3}Age_{80-89}$
+$log(deathrate_{Ag50-59})=log(pyrs) + \beta_{0}+\beta_{1}Age_{60-69}+\beta_{2}Age_{70-79}+\beta_{3}Age_{80-89}$
+
+Question 5
+```{r}
+#-----a
+
+#Model without age
+poissmod <- glm(deaths~offset(log(pyrs)), family = poisson, data=rubber)
+summary(poissmod) ##oly the model with death rate
+
+#
+poissmod1 <- glm(deaths~factor(agegrp), family = poisson, data=rubber, offset = log(pyrs))
+summary(poissmod1)
+tbl_regression(poissmod1,
+    exponentiate = TRUE, conf.int = T
+  )
+
+#compare the models
+anova(poissmod1, poissmod)
+#test statistic here is differentce in the log likelihooods * 2
+
+#for agegroup 1: 
+#Very strong evidence of association of age and death rate, for all the age groups.
+
+
+#-----b
+#---i
+rr_6069_5059 <- exp(coef(poissmod1)[2])
+drate_6069 <- coef(poissmod1)[1]+coef(poissmod1)[2] ##Death rate for the agegroup 60-69
+drate_5059 <- coef(poissmod1)[1]
+exp(drate_6069)/exp(drate_5059) ##Confidence interval: 2.82 - 9.04
+Urr_6069_5059 <- exp(coef(poissmod1)[2]+1.96*(0.2950))
+Lrr_6069_5059 <- exp(coef(poissmod1)[2]-1.96*(0.2950))
+
+
+exp((coef(poissmod1)[1]+coef(poissmod1)[2])-coef(poissmod1)[1])
+confint(poissmod1)
+
+#---ii
+drate_7079 <- coef(poissmod1)[1]+coef(poissmod1)[3]
+drate_8089 <- coef(poissmod1)[1]+coef(poissmod1)[4]
+exp(drate_8089)/exp(drate_7079) ##Rate ratio for 80-89 vs 70-79
+
+
+###SE for ii
+vcov(poissmod1)
+
+SE <- sqrt()
+
+
+##Also the marginal effects package can be used to get that: Use the hypothesis function
+
+
+```
+
+
+Question 6
+```{r}
+poissmod2 <- glm(deaths~factor(agegrp)+factor(factory), family = poisson, data=rubber, offset = log(pyrs))
+summary(poissmod2)
+tbl_regression(poissmod2)
+####
+anova(poissmod2, poissmod1)
+
+
+
+##Rate ratio for the two factories
+exp(coef(poissmod2)[5])
+exp(coef(poissmod2)[5]-(1.96*0.1590)); exp(coef(poissmod2)[5]+(1.96*0.1590)) ##95% CI
+
+```
+There is no evidence of difference in rates for the two factories (p-value=0.223). Thi sshouldnt suprise us given that he residual deviance in the model fo age alone showed that there is no evidence of refsing the model. it was alomist perfect
+
+
+
+
+
+Question 7
+```{r}
+#Interaction model
+poissmod3 <- glm(deaths~factor(agegrp)*factor(factory), family = poisson, data=rubber, offset = log(pyrs))
+summary(poissmod3)
+tbl_regression(poissmod3, exp=T)
+#a This is the SATURATED model: The deviance is extremely big and the Df =0. This is the saturated model, it uses up all the DFs
+#b No evidence of interaction
+
+
+
+```
+
+
+Question 8
+```{r}
+
+```
+
+
+Question 9
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+

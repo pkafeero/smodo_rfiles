@@ -1,0 +1,86 @@
+---
+title: "Session3"
+author: "Paddy Kafeero"
+date: "2026-01-13"
+output: html_document
+---
+
+Prediction modeling.
+Knowing the best model is important.
+In many cases you may have a very large number of variables compared to the number of observations.
+In many statistical software, the 5 major techniques for dealing with issue have been implemented.
+
+1. Step-wise foward regression
+ start with a model consisting only of the intercept. For both, add the predictor to the model with the smallest p-value (for that reason, all models with just one predictor) and compare p-values.Add all possible predictors to the model in the last step and expand the model with the one with the smallest p-value or the one increasing the measure of fit (R2 or standard error of the estimate). Continue until some stopping criterion is met (that is, no increase in the R2), and use the model with the highest R2 or smallest standard error of the estimate (SEE) as your model.
+
+
+
+2. Best subsets regression
+start with a model consisting only of the intercept. For both, add the predictor to the model with the smallest p-value (for that reason, all models with just one predictor) and compare p-values. Keep the best one-variable model using R2. Compute all least-squares regression models with all possible two-variable models. Keep the best two-variable model. Compute all least-squares regression models with all possible three-variable models. Keep the best three variable model. Continue until all combinations of models with all variables are fit. You may want to limit this to some number k < n < p, in which n is the sample size and p is the number of variables available. Rank the fitted models by highest to lowest R2, and choose the model with the highest value. For models with similar R2 values, choose the model with the smallest number of variables.
+
+Both methods are easy to implement and automatic algorithsm exist and they a;ways produce a result.  A disadvantage of both approaches is that stopping rules can be unstable because a small perturbation of the data can lead to different results. If independent variables are highly correlated, the resulting model will include only one of the variables. So you may miss the “best” model, making the results difficult to interpret. It also can be time consuming when building a best subsets model.
+
+These methods are optimized for the data set, but there is a chance the model will pick unimportant features that are unique to the modeling data set and not important to an overall inferential model. Therefore, it may fail on new data sets.
+To combart this issue, you can have a training data subset to buil the mode and a small testing data subset to assess how well the model predicts other data.
+
+Both methods are unbiased however amd do not include any previous information of how variables are known to interact. This makes understanding the outcome a bit difficult
+
+Packages for use in these two methods are: 
+  - `leaps` fpr BEST SUBSETS using `regsubsets()` and setting the method argument to `foward`; 
+  - `MASS` is a core R package for Stepwise Selection using `stepAIC()`. uses the AIC(Akaike Information Criterion) to choose which variables to drop or add
+  - `olsrr` is a modern package with more detailed output and easier to use. Build specially for OLS regression diagnostics and variable selection. includes functions like `ols_step_best_subset()` for best subsets and `ols_step_forward_p()` for the stepwise foward regression.
+  - `bestglm` Specifically designed for best subset selection in Generalized Linear Models (like Logistic Regression)
+  - `BeSS` Focuses on high-dimensional data where the number of predictors ($p$) might be very large
+
+
+3. Principle components with regression
+Preforming principle components analysis (PCA) or a factor analysis on the design matrix X to create a set of smaller, uncorrelated and new variables.
+
+Scree plot?
+
+PCA is helpful because it involves combining collinear variables into one significant variable for the model. The combined variables may be complex at times but they sometimes hint on underlying associations of the variables.
+E.g. combining height and weight in predicting heart attacks will give a single strong significant variable which is a major predictor of heart attacks.
+PCA is a useful technique for reducing the number of variables—especially when there is a known correlation among the variables—and can be a quick method to develop an optimized model.
+
+4. Ridge Regression
+Ridge regression shrinks the regression coefficients 
+by adding a penalty to the least-squares criterion. It 
+does this by penalizing the residual sum of squares 
+by adding a weight times the sum of the values of 
+the squared regression coefficients where large coef
+f
+icients are down-weighted. This reduces the overall 
+variability of the prediction model and is a trade-off 
+between goodness of fit (residual sum of squares) and 
+a penalty
+The advantage of ridge regression is that it’s capable 
+of reducing the variability and improving the accuracy 
+of linear regression models. These gains are largest in 
+the presence of multicollinearity among the indepen
+dent variables.
+What ridge regression doesn’t do is variable selec
+tion, and it fails to take into account the fact that a par
+simonious model with few parameters can’t zero out 
+coefficients; thus, you either end up including all the 
+coefficients in the model or none of them
+Ridge regression presents one option for reducing 
+the variable weights, but not the number of variables. 
+It produces a stable regression—in contrast to least 
+squares alone—but leaves all the independent vari
+ables in the model, although many now have almost 
+zero weight. Evaluation of the models is done by exam
+ining the ridge trace plot.
+
+5. LASSO Regression
+similar to ridge regression because it penalizes the regression coefficients, but it uses the absolute size of the coefficients rather than the square of the coefficients to compute the penalty weight. In contrast to ridge regression, the LASSO method automatically does parameter shrinkage and variable selection. For large sample sizes and a large number of variables, the result approximates the least-squares solution. The method also works well with a large number of variables that are not multicollinear, as well as in the presence of multicollinearity. 
+
+Designed to be computationally fast for large data sets that are accompanied by a large number of variables, LASSO provides an automatic way to scale and select your variables in many cases—including sparse matrixes. The fit of the models can be examined in a plot similar to the ridge trace.
+
+
+
+
+
+
+
+
+
